@@ -62,13 +62,10 @@ const onTouchEnd = () => {
 
 const handleClick = () => {
   if (!isDragging) {
-    console.log('Widget clicked, navigating to player...');
     uni.navigateTo({
       url: '/pages/player/player',
       fail: (err) => {
         console.error('Navigation failed:', err);
-        // 如果跳转失败（比如已经在播放页），尝试重定向
-        // uni.redirectTo({ url: '/pages/player/player' });
       }
     });
   }
@@ -85,10 +82,7 @@ const handleClick = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 9999; /* 确保最高层级 */
-  /* 限制拖拽范围不超出屏幕太远 */
-  max-width: 100vw;
-  max-height: 100vh;
+  z-index: 9999;
 }
 
 .glow-ring {

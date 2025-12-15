@@ -12,14 +12,49 @@ export const getUserPlaylists = () => {
 };
 
 /**
- * 创建歌单
- * @param {string} name - 歌单名称
+ * 获取用户歌单详情
+ * @param {number} playlist_id - 歌单ID
  */
-export const createPlaylist = (name) => {
+export const getUserPlaylistDetail = (playlist_id) => {
+  return request({
+    url: `/user/playlist/${playlist_id}`,
+    method: 'GET'
+  });
+};
+
+/**
+ * 创建歌单
+ * @param {Object} data - { name, description, cover_url }
+ */
+export const createPlaylist = (data) => {
   return request({
     url: '/user/create_playlist',
     method: 'POST',
-    data: { name }
+    data: data
+  });
+};
+
+/**
+ * 更新歌单信息
+ * @param {number} playlist_id - 歌单ID
+ * @param {Object} data - { name, cover_url }
+ */
+export const updatePlaylist = (playlist_id, data) => {
+  return request({
+    url: `/user/playlist/${playlist_id}`,
+    method: 'PUT',
+    data: data
+  });
+};
+
+/**
+ * 删除歌单
+ * @param {number} playlist_id - 歌单ID
+ */
+export const deletePlaylist = (playlist_id) => {
+  return request({
+    url: `/user/playlist/${playlist_id}`,
+    method: 'DELETE'
   });
 };
 
@@ -37,6 +72,18 @@ export const addSongToPlaylist = (playlist_id, songData) => {
 };
 
 /**
+ * 从歌单删除歌曲
+ * @param {number} playlist_id - 歌单ID
+ * @param {number} song_id - 歌曲ID
+ */
+export const removeSongFromPlaylist = (playlist_id, song_id) => {
+  return request({
+    url: `/user/playlist/${playlist_id}/remove_song/${song_id}`,
+    method: 'DELETE'
+  });
+};
+
+/**
  * 获取播放历史
  * @param {Object} params - { page, limit }
  */
@@ -50,7 +97,7 @@ export const getPlayHistory = (params) => {
 
 /**
  * 保存播放历史
- * @param {Object} songData - { song_id, song_name, artist, album }
+ * @param {Object} songData - { song_id }
  */
 export const savePlayHistory = (songData) => {
 	return request({

@@ -1,210 +1,229 @@
 <template>
   <view class="parse-container">
-    <!-- 1. 输入区 -->
+    <view class="header">
+      <text class="title">音乐/歌单解析</text>
+      <text class="subtitle">支持网易云音乐链接或ID</text>
+    </view>
+
     <view class="input-section">
-      <input class="parse-input" placeholder="粘贴歌曲ID或链接" v-model="inputValue" />
-      <button class="paste-btn" @click="handlePaste">自动粘贴</button>
-    </view>
-
-    <!-- 2. 可视化与信息展示区 -->
-    <view class="visualizer-section">
-      <image v-if="parsedSong.pic" :src="parsedSong.pic" class="song-cover" mode="aspectFit"></image>
-
-      <view class="audio-visualizer" :class="{ 'playing': isPlaying }">
-        <view class="bar" v-for="i in 20" :key="i"></view>
-      </view>
-
-      <view v-if="parsedSong.name" class="song-info">
-        <text class="song-name">{{ parsedSong.name }}</text>
-        <text class="song-artist">{{ parsedSong.ar_name }}</text>
-      </view>
-       <view v-else class="placeholder-text">
-        <text>待解析...</text>
+      <input class="parse-input" placeholder="粘贴链接或输入ID" v-model="inputValue" />
+      <view class="btn-group">
+        <button class="action-btn paste" @click="handlePaste">粘贴</button>
+        <button class="action-btn clear" @click="inputValue = ''" v-if="inputValue">清空</button>
       </view>
     </view>
 
-    <!-- 3. 控制与操作区 -->
-    <view class="controls-section">
-      <button class="parse-btn" @click="handleParse">开始解析</button>
-      <button class="play-btn" :disabled="!parsedSong.url" @click="handlePlay">
-        {{ isPlaying ? '暂停播放' : '立即播放' }}
-      </button>
+    <view class="type-selector">
+      <view
+        class="type-item"
+        :class="{ active: parseType === 'song' }"
+        @click="parseType = 'song'"
+      >
+        <text>单曲</text>
+      </view>
+      <view
+        class="type-item"
+        :class="{ active: parseType === 'playlist' }"
+        @click="parseType = 'playlist'"
+      >
+        <text>歌单</text>
+      </view>
     </view>
 
-    <!-- 全局播放器控件 -->
+    <button class="parse-btn" @click="handleParse">开始解析</button>
+
+    <!-- 提示信息 -->
+    <view class="tips">
+      <text>提示：</text>
+      <text>1. 歌单解析后可一键转存到我的歌单</text>
+      <text>2. 单曲解析直接播放</text>
+    </view>
+
     <MusicPlayerWidget />
   </view>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import { parseMusic } from '@/api/music.js';
+import { onShow } from '@dcloudio/uni-app';
+import { playerStore } from '@/store/player.js';
+import { getSongUrl } from '@/api/music.js'; // 用于测试单曲有效性
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
+onShow(() => {
+  setTimeout(() => {
+    uni.showTabBar({ animation: true });
+  }, 200);
+});
+
 const inputValue = ref('');
-const parsedSong = ref({});
-const isPlaying = ref(false);
+const parseType = ref('playlist'); // 默认歌单，因为这是核心功能
 
 const handlePaste = () => {
   uni.getClipboardData({
     success: (res) => {
       inputValue.value = res.data;
+      // 简单的正则尝试自动识别类型
+      if (res.data.includes('playlist')) {
+        parseType.value = 'playlist';
+      } else if (res.data.includes('song')) {
+        parseType.value = 'song';
+      }
       uni.showToast({ title: '已粘贴', icon: 'none' });
     }
   });
 };
 
+const extractId = (str) => {
+  // 尝试匹配 id=123456
+  const match = str.match(/id=(\d+)/);
+  if (match) return match[1];
+
+  // 尝试匹配 /playlist/123456
+  const match2 = str.match(/\/playlist\/(\d+)/);
+  if (match2) return match2[1];
+
+  // 尝试匹配 /song/123456
+  const match3 = str.match(/\/song\/(\d+)/);
+  if (match3) return match3[1];
+
+  // 如果全是数字，直接返回
+  if (/^\d+$/.test(str)) return str;
+
+  return null;
+};
+
 const handleParse = async () => {
-  if (!inputValue.value) {
+  const input = inputValue.value.trim();
+  if (!input) {
     uni.showToast({ title: '请输入内容', icon: 'none' });
     return;
   }
-  uni.showLoading({ title: '解析中...' });
-  try {
-    const res = await parseMusic({ ids: inputValue.value, level: 'exhigh', type: 'json' });
-    if (res.status === 200) {
-      parsedSong.value = res;
-    } else {
-      uni.showToast({ title: res.message || '解析失败', icon: 'none' });
-    }
-  } catch (error) {
-    console.error(error);
-  } finally {
-    uni.hideLoading();
+
+  const id = extractId(input);
+  if (!id) {
+    uni.showToast({ title: '无法识别ID', icon: 'none' });
+    return;
+  }
+
+  if (parseType.value === 'playlist') {
+    // 跳转到歌单详情页，类型为 music (网易云歌单)
+    uni.navigateTo({
+      url: `/pages/playlist/detail?id=${id}&type=music`
+    });
+  } else {
+    // 单曲解析：直接尝试播放
+    // 这里我们构造一个临时的 song 对象，先只给 id，让 playerStore 去加载详情
+    // 注意：playerStore.setSongAndPlay 内部会调用 getSongUrl，但它需要 song.name 等信息
+    // 为了体验更好，我们应该先调用 search 或者 song_detail 接口获取信息
+    // 但为了简化，我们先直接传 ID，让 playerStore 尽力而为（它有默认值）
+    const tempSong = {
+      id: id,
+      name: '解析中...',
+      ar: [{ name: '未知歌手' }],
+      al: { picUrl: '' }
+    };
+    playerStore.setSongAndPlay(tempSong);
   }
 };
-
-const handlePlay = () => {
-  if (!parsedSong.value.url) return;
-  isPlaying.value = !isPlaying.value;
-  uni.showToast({ title: isPlaying.value ? '开始播放' : '已暂停', icon: 'none' });
-};
-
 </script>
 
 <style scoped>
 .parse-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   padding: 40rpx;
   background-color: #121212;
   min-height: 100vh;
   color: #fff;
-}
-.input-section {
-  display: flex;
-  width: 100%;
-  margin-bottom: 50rpx;
-}
-.parse-input {
-  flex-grow: 1;
-  background-color: #2a2a2a;
-  border: 1px solid #00f2ea;
-  border-radius: 10rpx;
-  padding: 20rpx;
-  color: #fff;
-}
-.paste-btn {
-  margin-left: 20rpx;
-  background-color: #00f2ea;
-  color: #121212;
-  border: none;
-  border-radius: 10rpx;
-  font-size: 28rpx;
-}
-.visualizer-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 500rpx;
-  background-color: #1a1a1a;
-  border-radius: 20rpx;
-  margin-bottom: 50rpx;
-  position: relative;
 }
-.song-cover {
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: 50%;
-  margin-bottom: 30rpx;
-  border: 4px solid #2a2a2a;
-}
-.song-info {
+.header {
+  margin-bottom: 60rpx;
   text-align: center;
 }
-.song-name {
-  font-size: 36rpx;
+.title {
+  font-size: 48rpx;
   font-weight: bold;
+  color: #00f2ea;
+  display: block;
+  margin-bottom: 10rpx;
 }
-.song-artist {
+.subtitle {
   font-size: 28rpx;
   color: #888;
 }
-.placeholder-text {
-  color: #555;
-  font-size: 32rpx;
-}
-.audio-visualizer {
-  position: absolute;
-  bottom: 40rpx;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  height: 80rpx;
-  gap: 6rpx;
-}
-.audio-visualizer .bar {
-  width: 8rpx;
-  background-color: #00f2ea;
-  height: 10%;
-  animation-duration: 1.2s;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-.audio-visualizer.playing .bar {
-  animation-name: bounce;
-}
-@keyframes bounce {
-  0%, 100% { height: 10%; }
-  50% { height: 100%; }
-}
-.audio-visualizer .bar:nth-child(2) { animation-delay: -1.1s; }
-.audio-visualizer .bar:nth-child(3) { animation-delay: -1.0s; }
-.audio-visualizer .bar:nth-child(4) { animation-delay: -0.9s; }
-.audio-visualizer .bar:nth-child(5) { animation-delay: -0.8s; }
-.audio-visualizer .bar:nth-child(6) { animation-delay: -0.7s; }
-.audio-visualizer .bar:nth-child(7) { animation-delay: -0.6s; }
-.audio-visualizer .bar:nth-child(8) { animation-delay: -0.5s; }
-.audio-visualizer .bar:nth-child(9) { animation-delay: -0.4s; }
-.audio-visualizer .bar:nth-child(10) { animation-delay: -0.3s; }
-.audio-visualizer .bar:nth-child(11) { animation-delay: -0.4s; }
-.audio-visualizer .bar:nth-child(12) { animation-delay: -0.5s; }
-.audio-visualizer .bar:nth-child(13) { animation-delay: -0.6s; }
-.audio-visualizer .bar:nth-child(14) { animation-delay: -0.7s; }
-.audio-visualizer .bar:nth-child(15) { animation-delay: -0.8s; }
-.audio-visualizer .bar:nth-child(16) { animation-delay: -0.9s; }
-.audio-visualizer .bar:nth-child(17) { animation-delay: -1.0s; }
-.audio-visualizer .bar:nth-child(18) { animation-delay: -1.1s; }
-.audio-visualizer .bar:nth-child(19) { animation-delay: -1.2s; }
-.audio-visualizer .bar:nth-child(20) { animation-delay: -1.3s; }
-.controls-section {
-  display: flex;
-  justify-content: space-around;
+.input-section {
   width: 100%;
+  margin-bottom: 40rpx;
 }
-.parse-btn, .play-btn {
-  width: 45%;
+.parse-input {
+  background-color: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 15rpx;
+  padding: 30rpx;
+  color: #fff;
+  font-size: 32rpx;
+  margin-bottom: 20rpx;
+}
+.btn-group {
+  display: flex;
+  justify-content: flex-end;
+}
+.action-btn {
+  font-size: 24rpx;
+  padding: 10rpx 30rpx;
+  margin-left: 20rpx;
+  background-color: #333;
+  color: #ccc;
+  border-radius: 30rpx;
+}
+.action-btn.paste {
+  color: #00f2ea;
+  border: 1px solid #00f2ea;
+  background-color: transparent;
+}
+
+.type-selector {
+  display: flex;
+  background-color: #2a2a2a;
+  border-radius: 50rpx;
+  padding: 10rpx;
+  margin-bottom: 60rpx;
+}
+.type-item {
+  padding: 15rpx 60rpx;
+  border-radius: 40rpx;
+  font-size: 30rpx;
+  color: #888;
+  transition: all 0.3s;
+}
+.type-item.active {
+  background-color: #00f2ea;
+  color: #121212;
+  font-weight: bold;
+}
+
+.parse-btn {
+  width: 80%;
   background-image: linear-gradient(45deg, #00f2ea, #00c2b8);
   color: #121212;
   font-weight: bold;
-  border: none;
-  border-radius: 10rpx;
+  border-radius: 50rpx;
+  font-size: 36rpx;
+  margin-bottom: 60rpx;
 }
-.play-btn:disabled {
-  background: #333;
+
+.tips {
+  width: 100%;
+  padding: 30rpx;
+  background-color: #1a1a1a;
+  border-radius: 15rpx;
+}
+.tips text {
+  display: block;
+  font-size: 26rpx;
   color: #666;
+  line-height: 1.8;
 }
 </style>

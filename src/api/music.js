@@ -68,3 +68,14 @@ export const getLyric = (song_id) => {
     method: 'GET'
   });
 };
+
+/**
+ * 获取歌曲封面
+ * @param {number} song_id - 歌曲ID
+ */
+export const getSongCover = (song_id) => {
+  return request({
+    url: `/music/song/cover/${song_id}`,
+    method: 'GET'
+  });
+};

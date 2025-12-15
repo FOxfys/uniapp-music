@@ -1,5 +1,7 @@
 import { reactive } from 'vue';
 import { getSongUrl } from '../api/music.js';
+import { savePlayHistory } from '../api/playlist.js';
+import { userStore } from './user.js';
 
 const audioManager = uni.getBackgroundAudioManager();
 
@@ -13,8 +15,6 @@ export const playerStore = reactive({
   playlist: [],
   currentTime: 0,
   duration: 0,
-  
-  // 播放模式: 'sequence' (顺序), 'loop' (单曲循环), 'random' (随机)
   playMode: 'sequence',
   
   widgetPosition: {
@@ -22,7 +22,6 @@ export const playerStore = reactive({
     y: screenHeight - 150
   },
 
-  // 切换播放模式
   togglePlayMode() {
     const modes = ['sequence', 'loop', 'random'];
     const currentIdx = modes.indexOf(this.playMode);
@@ -51,6 +50,14 @@ export const playerStore = reactive({
         audioManager.title = this.currentSong.name || '未知歌曲';
         audioManager.singer = this.currentSong.ar ? this.currentSong.ar.map(a => a.name).join('/') : '未知歌手';
         audioManager.coverImgUrl = this.currentSong.al ? this.currentSong.al.picUrl : '';
+        
+        // 修复：只传递 song_id
+        if (userStore.isLoggedIn) {
+          savePlayHistory({
+            song_id: this.currentSong.id
+          }).catch(err => console.error('Save history failed:', err));
+        }
+
       } else {
         uni.showToast({ title: '无法获取播放地址', icon: 'none' });
       }
@@ -80,24 +87,17 @@ export const playerStore = reactive({
     }
   },
 
-  // isAuto: 是否是自然播放结束触发的
   playNext(isAuto = false) {
     if (this.playlist.length === 0) return;
-
-    // 1. 单曲循环模式 (仅在自动播放结束时生效，手动点击下一首依然切歌)
     if (this.playMode === 'loop' && isAuto) {
       this.setSongAndPlay(this.currentSong);
       return;
     }
-
-    // 2. 随机播放模式
     if (this.playMode === 'random') {
       const randomIndex = Math.floor(Math.random() * this.playlist.length);
       this.setSongAndPlay(this.playlist[randomIndex]);
       return;
     }
-
-    // 3. 顺序播放模式 (默认)
     const currentIndex = this.playlist.findIndex(s => s.id === this.currentSong?.id);
     let nextIndex = 0;
     if (currentIndex !== -1) {
@@ -108,14 +108,11 @@ export const playerStore = reactive({
 
   playPrev() {
     if (this.playlist.length === 0) return;
-    
-    // 随机模式下，上一首通常也随机，或者按列表顺序。这里简单处理为随机
     if (this.playMode === 'random') {
       const randomIndex = Math.floor(Math.random() * this.playlist.length);
       this.setSongAndPlay(this.playlist[randomIndex]);
       return;
     }
-
     const currentIndex = this.playlist.findIndex(s => s.id === this.currentSong?.id);
     let prevIndex = 0;
     if (currentIndex !== -1) {
@@ -138,10 +135,7 @@ export const playerStore = reactive({
 audioManager.onPlay(() => playerStore.isPlaying = true);
 audioManager.onPause(() => playerStore.isPlaying = false);
 audioManager.onStop(() => { playerStore.isPlaying = false; });
-
-// 关键点：自然播放结束时，传入 true
 audioManager.onEnded(() => playerStore.playNext(true));
-
 audioManager.onTimeUpdate(() => {
   playerStore.currentTime = audioManager.currentTime;
   if (audioManager.duration && playerStore.duration !== audioManager.duration) {

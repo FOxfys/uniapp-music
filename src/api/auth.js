@@ -19,6 +19,14 @@ export const register = (data) => {
   });
 };
 
+// 用户登出
+export const logout = () => {
+  return request({
+    url: '/user/logout',
+    method: 'GET'
+  });
+};
+
 // 获取用户信息
 export const getUserInfo = () => {
   return request({
@@ -26,5 +34,3 @@ export const getUserInfo = () => {
     method: 'GET'
   });
 };
-
-// ... 其他用户相关的接口

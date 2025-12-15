@@ -1,9 +1,18 @@
 <template>
   <view class="home-container">
-    <!-- 1. 顶部搜索框 -->
-    <view class="search-bar" @click="goToSearch">
-      <view class="search-input-mock">
-        <text>搜索歌曲、歌手</text>
+    <!-- 1. 顶部区域：用户状态 + 搜索框 -->
+    <view class="top-bar">
+      <view class="user-status" @click="handleUserClick">
+        <image
+          class="avatar"
+          :src="userStore.isLoggedIn ? (userStore.userInfo.avatarUrl || '/static/default-avatar.png') : '/static/default-avatar.png'"
+        ></image>
+        <text class="nickname">{{ userStore.isLoggedIn ? userStore.userInfo.username : '未登录' }}</text>
+      </view>
+      <view class="search-bar" @click="goToSearch">
+        <view class="search-input-mock">
+          <text>搜索歌曲、歌手</text>
+        </view>
       </view>
     </view>
 
@@ -25,7 +34,6 @@
       </view>
     </view>
 
-    <!-- 全局播放器控件 -->
     <MusicPlayerWidget />
   </view>
 </template>
@@ -33,6 +41,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getHotPlaylists } from '@/api/music.js';
+import { userStore } from '@/store/user.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
 const bannerList = ref([]);
@@ -47,6 +56,14 @@ const fetchData = async () => {
     }
   } catch (error) {
     console.error('Failed to fetch hot playlists:', error);
+  }
+};
+
+const handleUserClick = () => {
+  if (userStore.isLoggedIn) {
+    uni.switchTab({ url: '/pages/my/my' });
+  } else {
+    uni.navigateTo({ url: '/pages/login/login' });
   }
 };
 
@@ -70,9 +87,42 @@ onMounted(() => {
   min-height: 100vh;
   padding: 20rpx;
   box-sizing: border-box;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
 }
-.search-bar { margin-bottom: 30rpx; }
-.search-input-mock { background-color: #2a2a2a; border-radius: 50rpx; padding: 15rpx 30rpx; color: #888; font-size: 28rpx; text-align: center; }
+
+/* 顶部栏 */
+.top-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+.user-status {
+  display: flex;
+  align-items: center;
+  margin-right: 20rpx;
+}
+.avatar {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  margin-right: 15rpx;
+}
+.nickname {
+  font-size: 28rpx;
+  white-space: nowrap;
+}
+.search-bar {
+  flex: 1;
+}
+.search-input-mock {
+  background-color: #2a2a2a;
+  border-radius: 50rpx;
+  padding: 15rpx 30rpx;
+  color: #888;
+  font-size: 28rpx;
+  text-align: center;
+}
+
 .banner-swiper { height: 300rpx; border-radius: 20rpx; overflow: hidden; margin-bottom: 40rpx; }
 .banner-image { width: 100%; height: 100%; }
 .section-title { font-size: 36rpx; font-weight: bold; margin-bottom: 30rpx; color: #00f2ea; }

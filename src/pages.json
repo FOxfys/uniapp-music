@@ -55,19 +55,26 @@
 				"navigationBarTitleText": "播放",
 				"navigationStyle": "custom"
 			}
+		},
+		{
+			"path": "pages/my/history",
+			"style": {
+				"navigationBarTitleText": "播放历史"
+			}
 		}
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "white",
 		"navigationBarTitleText": "Music",
 		"navigationBarBackgroundColor": "#121212",
-		"backgroundColor": "#121212"
+		"backgroundColor": "#121212",
+		"backgroundColorTop": "#121212",
+		"backgroundColorBottom": "#121212"
 	},
 	"tabBar": {
 		"color": "#8a8a8a",
 		"selectedColor": "#00f2ea",
 		"backgroundColor": "#1a1a1a",
-
 		"borderStyle": "black",
 		"list": [
 			{

@@ -1,53 +1,52 @@
 <template>
   <view class="player-container">
-    <!-- 背景 -->
-    <image :src="playerStore.currentSong?.al?.picUrl" class="bg-image" mode="aspectFill"></image>
+    <!-- 背景层 -->
+    <image :src="coverUrl" class="bg-image" mode="aspectFill"></image>
     <view class="bg-mask"></view>
+    <view class="bg-noise"></view>
 
-    <!-- 自定义导航栏 -->
+    <!-- 顶部导航 -->
     <view class="nav-bar">
-      <view class="back-icon" @click="goBack">‹</view>
-      <view class="title">
-        <text>{{ playerStore.currentSong?.name }}</text>
-        <text class="artist">{{ playerStore.currentSong?.ar?.map(a => a.name).join('/') }}</text>
+      <view class="back-btn" @click="goBack">
+        <view class="icon-chevron-down"></view>
       </view>
-      <view class="share-icon">···</view>
+      <view class="title-area">
+        <text class="song-title">{{ playerStore.currentSong?.name || '未知歌曲' }}</text>
+        <text class="singer-name">{{ getArtistName(playerStore.currentSong) }}</text>
+      </view>
+      <view class="right-placeholder"></view>
     </view>
 
-    <!-- 封面/歌词切换区域 -->
+    <!-- 中间内容区 -->
     <swiper
       class="content-swiper"
       :current="swiperIndex"
       @change="swiperIndex = $event.detail.current"
-      duration="300"
+      duration="400"
     >
-      <!-- 第一页：封面 -->
+      <!-- 封面页 -->
       <swiper-item @click="swiperIndex = 1">
-        <view class="cover-section">
-          <image
-            :src="playerStore.currentSong?.al?.picUrl"
-            class="cover-image"
-            :class="{ playing: playerStore.isPlaying }"
-            mode="aspectFit"
-          ></image>
+        <view class="cover-wrapper">
+          <view class="cover-glow" :class="{ playing: playerStore.isPlaying }"></view>
+          <view class="cover-disc" :class="{ playing: playerStore.isPlaying }">
+            <image :src="coverUrl" class="cover-image" mode="aspectFill"></image>
+            <view class="disc-center"></view>
+          </view>
         </view>
       </swiper-item>
 
-      <!-- 第二页：歌词 -->
+      <!-- 歌词页 -->
       <swiper-item @click="swiperIndex = 0">
         <scroll-view
           scroll-y
-          class="lyric-section"
+          class="lyric-scroll"
           :scroll-top="lyricScrollTop"
           scroll-with-animation
         >
-          <!-- 顶部占位，让第一句歌词能显示在中间 -->
           <view class="lyric-placeholder"></view>
-
-          <view v-if="lyric.length === 0" class="lyric-line debug-info">
+          <view v-if="lyric.length === 0" class="lyric-line no-lyric">
             {{ debugMsg || '纯音乐，请欣赏' }}
           </view>
-
           <view
             class="lyric-line"
             :class="{ active: index === lyricIndex }"
@@ -56,48 +55,81 @@
           >
             {{ line.text }}
           </view>
-
-          <!-- 底部占位 -->
           <view class="lyric-placeholder"></view>
         </scroll-view>
       </swiper-item>
     </swiper>
 
-    <!-- 分页指示点 -->
-    <view class="dots-container">
-      <view class="dot" :class="{ active: swiperIndex === 0 }"></view>
-      <view class="dot" :class="{ active: swiperIndex === 1 }"></view>
+    <!-- 底部控制区 -->
+    <view class="footer-area">
+      <!-- 进度条 -->
+      <view class="progress-container">
+        <text class="time-text">{{ formatTime(playerStore.currentTime) }}</text>
+        <view class="slider-wrapper">
+          <slider
+            class="custom-slider"
+            :value="progress"
+            @changing="onSliderChanging"
+            @change="onSliderChange"
+            activeColor="#00f2ea"
+            backgroundColor="rgba(255,255,255,0.15)"
+            block-size="16"
+            block-color="#fff"
+          />
+        </view>
+        <text class="time-text">{{ formatTime(playerStore.duration) }}</text>
+      </view>
+
+      <!-- 核心控制按钮 -->
+      <view class="controls-grid">
+        <!-- 模式切换 -->
+        <view class="ctrl-btn mode-btn" @click="playerStore.togglePlayMode()">
+          <view class="icon-mode" :class="playerStore.playMode"></view>
+        </view>
+
+        <!-- 上一首 -->
+        <view class="ctrl-btn prev-btn" @click="playerStore.playPrev()">
+          <view class="icon-prev"></view>
+        </view>
+
+        <!-- 播放/暂停 (C位) -->
+        <view class="play-pause-wrapper" @click="togglePlayPause">
+          <view class="play-pause-btn" :class="{ playing: playerStore.isPlaying }">
+            <view class="icon-play-pause" :class="{ paused: !playerStore.isPlaying }"></view>
+          </view>
+        </view>
+
+        <!-- 下一首 -->
+        <view class="ctrl-btn next-btn" @click="playerStore.playNext()">
+          <view class="icon-next"></view>
+        </view>
+
+        <!-- 收藏按钮 -->
+        <view class="ctrl-btn fav-btn" @click="showAddToPlaylist">
+          <view class="icon-heart"></view>
+        </view>
+      </view>
     </view>
 
-    <!-- 进度条 -->
-    <view class="progress-section">
-      <text>{{ formatTime(playerStore.currentTime) }}</text>
-      <slider
-        class="progress-slider"
-        :value="progress"
-        @changing="onSliderChanging"
-        @change="onSliderChange"
-        activeColor="#00f2ea"
-        backgroundColor="rgba(255,255,255,0.3)"
-        block-size="12"
-        block-color="#fff"
-      ></slider>
-      <text>{{ formatTime(playerStore.duration) }}</text>
-    </view>
-
-    <!-- 控制按钮 -->
-    <view class="controls-section">
-      <view class="btn loop-btn" @click="playerStore.togglePlayMode()">
-        <text v-if="playerStore.playMode === 'sequence'">🔁</text>
-        <text v-if="playerStore.playMode === 'loop'">🔂</text>
-        <text v-if="playerStore.playMode === 'random'">🔀</text>
+    <!-- 收藏到歌单弹窗 -->
+    <view class="modal-mask" v-if="isFavModalVisible" @click="isFavModalVisible = false">
+      <view class="modal-content" @click.stop>
+        <text class="modal-title">收藏到歌单</text>
+        <scroll-view scroll-y class="playlist-scroll">
+          <view
+            class="playlist-item"
+            v-for="pl in myPlaylists"
+            :key="pl.id"
+            @click="addToPlaylist(pl.id)"
+          >
+            <image :src="pl.cover_url || '/static/default-avatar.png'" class="pl-cover" mode="aspectFill"></image>
+            <view class="pl-info">
+              <text class="pl-name">{{ pl.name }}</text>
+              <text class="pl-count">{{ pl.song_count || 0 }} 首</text>
+            </view>
+          </view>
+        </scroll-view>
       </view>
-      <view class="btn prev-btn" @click="playerStore.playPrev()">⏪</view>
-      <view class="btn play-pause-btn" @click="togglePlayPause">
-        {{ playerStore.isPlaying ? '❚❚' : '▶' }}
-      </view>
-      <view class="btn next-btn" @click="playerStore.playNext()">⏩</view>
-      <view class="btn playlist-btn">☰</view>
     </view>
   </view>
 </template>
@@ -106,7 +138,9 @@
 import { ref, watch, computed } from 'vue';
 import { onShow, onUnload } from '@dcloudio/uni-app';
 import { playerStore } from '@/store/player.js';
-import { getLyric } from '@/api/music.js';
+import { userStore } from '@/store/user.js';
+import { getLyric, getSongCover } from '@/api/music.js';
+import { getUserPlaylists, addSongToPlaylist } from '@/api/playlist.js';
 
 const swiperIndex = ref(0);
 const lyric = ref([]);
@@ -114,6 +148,31 @@ const lyricIndex = ref(0);
 const lyricScrollTop = ref(0);
 const debugMsg = ref('');
 let isSeeking = false;
+const coverUrl = ref('/static/default-avatar.png');
+
+// 收藏相关
+const isFavModalVisible = ref(false);
+const myPlaylists = ref([]);
+
+const fetchCover = async (id) => {
+  if (!id) return;
+  try {
+    const res = await getSongCover(id);
+    if (res.data && res.data.picUrl) {
+      coverUrl.value = res.data.picUrl;
+    }
+  } catch (error) {
+    console.error('Fetch cover failed:', error);
+  }
+};
+
+const getArtistName = (song) => {
+  if (!song) return '';
+  if (song.ar) return song.ar.map(a => a.name).join('/');
+  if (song.artists) return song.artists.map(a => a.name).join('/');
+  if (song.artist) return song.artist;
+  return '未知歌手';
+};
 
 const fetchLyric = async (id) => {
   if (!id) return;
@@ -185,7 +244,10 @@ const onSliderChange = (e) => {
 
 let stopWatch = null;
 onShow(() => {
-  fetchLyric(playerStore.currentSong?.id);
+  const songId = playerStore.currentSong?.id;
+  fetchLyric(songId);
+  fetchCover(songId);
+
   stopWatch = watch(() => playerStore.currentTime, (newTime) => {
     if (isSeeking || lyric.value.length === 0) return;
 
@@ -203,9 +265,7 @@ onShow(() => {
 
     if (lyricIndex.value !== newIndex) {
       lyricIndex.value = newIndex;
-      // 调整滚动位置，让高亮行位于屏幕中间 (假设容器高度的一半减去行高的一半)
-      // 300px (容器半高) - 32px (行半高) = 268px
-      lyricScrollTop.value = Math.max(0, newIndex * 64 - 200);
+      lyricScrollTop.value = Math.max(0, newIndex * 80 - 250); // 调整滚动高度
     }
   });
 });
@@ -217,6 +277,7 @@ onUnload(() => {
 watch(() => playerStore.currentSong?.id, (newId, oldId) => {
   if (newId && newId !== oldId) {
     fetchLyric(newId);
+    fetchCover(newId);
   }
 });
 
@@ -232,52 +293,474 @@ const formatTime = (time = 0) => {
   const seconds = Math.floor(time % 60);
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
+
+// --- 收藏功能 ---
+const showAddToPlaylist = async () => {
+  if (!userStore.isLoggedIn) {
+    uni.showToast({ title: '请先登录', icon: 'none' });
+    setTimeout(() => uni.navigateTo({ url: '/pages/login/login' }), 1000);
+    return;
+  }
+
+  uni.showLoading({ title: '加载歌单...' });
+  try {
+    const res = await getUserPlaylists();
+    if (res.code === 200 && res.playlists) {
+      myPlaylists.value = res.playlists;
+      isFavModalVisible.value = true;
+    } else {
+      uni.showToast({ title: '获取歌单失败', icon: 'none' });
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    uni.hideLoading();
+  }
+};
+
+const addToPlaylist = async (playlistId) => {
+  uni.showLoading({ title: '添加中...' });
+  try {
+    const res = await addSongToPlaylist(playlistId, { song_id: playerStore.currentSong.id });
+    if (res.code === 200) {
+      uni.showToast({ title: '已收藏', icon: 'success' });
+      isFavModalVisible.value = false;
+    } else {
+      uni.showToast({ title: res.message || '收藏失败', icon: 'none' });
+    }
+  } catch (error) {
+    console.error(error);
+    uni.showToast({ title: '请求失败', icon: 'none' });
+  } finally {
+    uni.hideLoading();
+  }
+};
 </script>
 
 <style scoped>
-.player-container { display: flex; flex-direction: column; height: 100vh; color: #fff; position: relative; }
-.bg-image { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; filter: blur(50px); transform: scale(1.5); }
-.bg-mask { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: -1; }
-.nav-bar { display: flex; align-items: center; padding: 0 30rpx; height: 88rpx; padding-top: var(--status-bar-height); z-index: 10; }
-.back-icon { font-size: 50rpx; width: 80rpx; font-weight: bold; }
-.title { flex: 1; text-align: center; overflow: hidden; }
-.title text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.artist { font-size: 24rpx; color: #ccc; }
-.share-icon { font-size: 40rpx; width: 80rpx; text-align: right; }
+.player-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  color: #fff;
+  position: relative;
+  background-color: #000;
+  overflow: hidden;
+}
 
-.content-swiper { flex: 1; height: 0; /* 关键：配合flex:1使用 */ }
-.cover-section { display: flex; justify-content: center; align-items: center; height: 100%; }
-.cover-image { width: 500rpx; height: 500rpx; border-radius: 50%; border: 8rpx solid rgba(255,255,255,0.1); animation: rotate 20s linear infinite; animation-play-state: paused; }
-.cover-image.playing { animation-play-state: running; }
+/* 背景 */
+.bg-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  filter: blur(80px);
+  transform: scale(1.2);
+  opacity: 0.5;
+}
+.bg-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(0,0,0,0.2), rgba(0,0,0,0.9));
+  z-index: 2;
+}
+.bg-noise {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* 导航栏 */
+.nav-bar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  padding: 0 30rpx;
+  height: 100rpx;
+  padding-top: calc(40rpx + env(safe-area-inset-top));
+}
+.back-btn, .right-placeholder {
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.title-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+}
+.song-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80%;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.singer-name {
+  font-size: 24rpx;
+  color: rgba(255,255,255,0.7);
+  margin-top: 6rpx;
+}
+
+/* 中间内容 */
+.content-swiper {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  height: 0;
+}
+
+/* 封面样式 */
+.cover-wrapper {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+.cover-glow {
+  position: absolute;
+  width: 500rpx;
+  height: 500rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 242, 234, 0.2), transparent 70%);
+  opacity: 0;
+  transition: opacity 1s;
+}
+.cover-glow.playing {
+  opacity: 1;
+  animation: pulse 3s infinite;
+}
+.cover-disc {
+  width: 560rpx;
+  height: 560rpx;
+  border-radius: 50%;
+  background: #111;
+  border: 12rpx solid rgba(255,255,255,0.05);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  position: relative;
+  animation: rotate 24s linear infinite;
+  animation-play-state: paused;
+}
+.cover-disc.playing {
+  animation-play-state: running;
+}
+.cover-image {
+  width: 380rpx;
+  height: 380rpx;
+  border-radius: 50%;
+  border: 4rpx solid #000;
+}
+.disc-center {
+  position: absolute;
+  width: 20rpx;
+  height: 20rpx;
+  background: #000;
+  border-radius: 50%;
+  border: 4rpx solid rgba(255,255,255,0.2);
+  z-index: 5;
+}
+
 @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes pulse { 0% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.2; } 100% { transform: scale(1); opacity: 0.5; } }
 
-.lyric-section { height: 100%; text-align: center; }
-.lyric-placeholder { height: 50%; } /* 占位，允许首尾歌词滚到中间 */
+/* 歌词样式优化 */
+.lyric-scroll { height: 100%; text-align: center; }
+.lyric-placeholder { height: 50%; }
 .lyric-line {
-  min-height: 64rpx;
-  line-height: 1.5;
-  padding: 16rpx 40rpx;
-  color: rgba(255,255,255,0.6);
-  font-size: 30rpx;
-  transition: all 0.3s;
+  min-height: 80rpx; /* 增加行高 */
+  line-height: 1.8;
+  padding: 20rpx 40rpx;
+  color: rgba(255,255,255,0.6); /* 更亮的灰色 */
+  font-size: 32rpx; /* 加大字号 */
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  filter: blur(0.5px);
 }
 .lyric-line.active {
   color: #00f2ea;
+  font-size: 44rpx; /* 高亮字号加大 */
+  font-weight: bold;
+  text-shadow: 0 0 20px rgba(0, 242, 234, 0.6); /* 更强的光晕 */
+  filter: blur(0);
+  transform: scale(1.1);
+}
+.no-lyric { color: #888; margin-top: 200rpx; }
+
+/* 底部控制区 */
+.footer-area {
+  position: relative;
+  z-index: 10;
+  padding: 0 40rpx;
+  padding-bottom: calc(60rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+}
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 50rpx;
+}
+.time-text {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.6);
+  width: 80rpx;
+  text-align: center;
+  font-family: monospace;
+}
+.slider-wrapper {
+  flex: 1;
+  margin: 0 20rpx;
+}
+.custom-slider {
+  margin: 0;
+}
+
+/* 按钮网格 */
+.controls-grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40rpx;
+}
+
+.ctrl-btn {
+  width: 90rpx;
+  height: 90rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: all 0.2s;
+}
+.ctrl-btn:active {
+  background-color: rgba(255,255,255,0.15);
+  transform: scale(0.95);
+}
+
+/* 播放按钮特写 */
+.play-pause-wrapper {
+  width: 140rpx;
+  height: 140rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.play-pause-btn {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00f2ea, #00c2b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(0, 242, 234, 0.4);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.play-pause-btn:active {
+  transform: scale(0.9);
+  box-shadow: 0 0 10px rgba(0, 242, 234, 0.2);
+}
+.play-pause-btn.playing {
+  box-shadow: 0 0 30px rgba(0, 242, 234, 0.6);
+}
+
+/* --- CSS 图标绘制 --- */
+.icon-chevron-down {
+  width: 24rpx;
+  height: 24rpx;
+  border-left: 4rpx solid #fff;
+  border-bottom: 4rpx solid #fff;
+  transform: rotate(-45deg);
+  margin-top: -10rpx;
+}
+
+.icon-play-pause {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 20rpx 0 20rpx 36rpx;
+  border-color: transparent transparent transparent #121212;
+  margin-left: 8rpx;
+  transition: all 0.2s;
+}
+.play-pause-btn.playing .icon-play-pause {
+  width: 28rpx;
+  height: 36rpx;
+  border-width: 0;
+  border-left: 8rpx solid #121212;
+  border-right: 8rpx solid #121212;
+  background: transparent;
+  margin-left: 0;
+}
+
+.icon-prev {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 14rpx 20rpx 14rpx 0;
+  border-color: transparent #fff transparent transparent;
+  position: relative;
+}
+.icon-prev::after {
+  content: '';
+  position: absolute;
+  left: -6rpx;
+  top: -14rpx;
+  width: 4rpx;
+  height: 28rpx;
+  background-color: #fff;
+}
+
+.icon-next {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 14rpx 0 14rpx 20rpx;
+  border-color: transparent transparent transparent #fff;
+  position: relative;
+}
+.icon-next::after {
+  content: '';
+  position: absolute;
+  right: -6rpx;
+  top: -14rpx;
+  width: 4rpx;
+  height: 28rpx;
+  background-color: #fff;
+}
+
+.icon-mode {
+  width: 30rpx;
+  height: 20rpx;
+  border: 3rpx solid #ccc;
+  border-radius: 6rpx;
+  position: relative;
+}
+.icon-mode.loop::after {
+  content: '1';
+  position: absolute;
+  font-size: 16rpx;
+  color: #ccc;
+  top: 0;
+  left: 8rpx;
+}
+.icon-mode.random {
+  border: none;
+  background: transparent;
+}
+.icon-mode.random::before, .icon-mode.random::after {
+  content: '';
+  position: absolute;
+  width: 30rpx;
+  height: 3rpx;
+  background: #ccc;
+  top: 8rpx;
+  transform: rotate(20deg);
+}
+.icon-mode.random::after {
+  transform: rotate(-20deg);
+}
+
+.icon-heart {
+  width: 24rpx;
+  height: 24rpx;
+  background-color: #ccc;
+  transform: rotate(45deg);
+  position: relative;
+  margin-top: 6rpx;
+}
+.icon-heart::before, .icon-heart::after {
+  content: '';
+  width: 24rpx;
+  height: 24rpx;
+  background-color: #ccc;
+  border-radius: 50%;
+  position: absolute;
+}
+.icon-heart::before { left: -12rpx; }
+.icon-heart::after { top: -12rpx; }
+
+/* 弹窗样式 */
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.6);
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.modal-content {
+  width: 80%;
+  max-height: 60%;
+  background-color: #2a2a2a;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  display: flex;
+  flex-direction: column;
+}
+.modal-title {
   font-size: 36rpx;
   font-weight: bold;
-  text-shadow: 0 0 10px rgba(0, 242, 234, 0.5);
+  color: #fff;
+  margin-bottom: 30rpx;
+  text-align: center;
 }
-.debug-info { color: #aaa; font-size: 28rpx; margin-top: 200rpx; }
-
-.dots-container { display: flex; justify-content: center; padding: 20rpx; gap: 15rpx; }
-.dot { width: 12rpx; height: 12rpx; border-radius: 50%; background-color: rgba(255,255,255,0.3); transition: all 0.3s; }
-.dot.active { background-color: #00f2ea; width: 30rpx; border-radius: 10rpx; }
-
-.progress-section { display: flex; align-items: center; padding: 0 30rpx; font-size: 22rpx; color: #ccc; margin-bottom: 10rpx; }
-.progress-slider { flex: 1; margin: 0 20rpx; }
-
-.controls-section { display: flex; justify-content: space-around; align-items: center; padding: 30rpx; padding-bottom: calc(40rpx + var(--safe-area-inset-bottom)); }
-.btn { font-size: 40rpx; color: #eee; text-align: center; }
-.loop-btn { width: 80rpx; }
-.play-pause-btn { width: 120rpx; height: 120rpx; line-height: 120rpx; border: 2px solid #eee; border-radius: 50%; font-size: 50rpx; }
+.playlist-scroll {
+  flex: 1;
+  height: 0;
+  min-height: 400rpx;
+}
+.playlist-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1px solid #333;
+}
+.pl-cover {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 10rpx;
+  margin-right: 20rpx;
+}
+.pl-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.pl-name {
+  font-size: 30rpx;
+  color: #fff;
+}
+.pl-count {
+  font-size: 24rpx;
+  color: #888;
+}
 </style>

@@ -19,7 +19,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { login, register } from '@/api/auth.js';
 import { userStore } from '@/store/user.js';
 
@@ -27,6 +27,14 @@ const isLoginMode = ref(true);
 const username = ref('');
 const password = ref('');
 const confirmPassword = ref('');
+
+onMounted(() => {
+  const history = uni.getStorageSync('loginHistory');
+  if (history) {
+    username.value = history.username || '';
+    password.value = history.password || '';
+  }
+});
 
 const handleSubmit = async () => {
   if (!username.value || !password.value) {
@@ -38,27 +46,36 @@ const handleSubmit = async () => {
 
   try {
     if (isLoginMode.value) {
-      // 登录
-      const res = await login({ username: username.value, password: password.value });
-      if (res.code === 200) {
-        // 假设登录成功返回 user_id 和 token
-        // 注意：你的文档只返回了 user_id，这里我们先模拟一个 token
-        const token = `fake-token-for-${res.user_id}`;
-        userStore.login({ username: username.value, id: res.user_id }, token);
+      const loginRes = await login({ username: username.value, password: password.value });
+      if (loginRes.code === 200) {
+        // 登录成功后，立即获取用户信息
+        const userInfo = await userStore.fetchUserInfo();
 
-        uni.showToast({ title: '登录成功', icon: 'success' });
-        uni.navigateBack(); // 返回上一页
+        if (userInfo) {
+          uni.setStorageSync('loginHistory', {
+            username: username.value,
+            password: password.value
+          });
+
+          uni.showToast({ title: '登录成功', icon: 'success' });
+
+          setTimeout(() => {
+            uni.switchTab({ url: '/pages/my/my' });
+          }, 1000);
+        } else {
+          uni.showToast({ title: '获取用户信息失败', icon: 'none' });
+        }
+      } else {
+        uni.showToast({ title: loginRes.message || '登录失败', icon: 'none' });
       }
     } else {
-      // 注册
-      if (password.value !== confirmPassword.value) {
-        uni.showToast({ title: '两次密码不一致', icon: 'none' });
-        return;
-      }
-      const res = await register({ username: username.value, password: password.value, confirm_password: confirmPassword.value });
-      if (res.code === 200) {
+      // 注册逻辑
+      const regRes = await register({ username: username.value, password: password.value, confirm_password: confirmPassword.value });
+      if (regRes.code === 200) {
         uni.showToast({ title: '注册成功，请登录', icon: 'success' });
-        isLoginMode.value = true; // 切换到登录模式
+        isLoginMode.value = true;
+      } else {
+        uni.showToast({ title: regRes.message || '注册失败', icon: 'none' });
       }
     }
   } catch (error) {
