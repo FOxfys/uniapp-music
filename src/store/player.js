@@ -36,28 +36,28 @@ export const playerStore = reactive({
 
   async setSongAndPlay(song) {
     if (!song) return;
+    
+    this.currentTime = 0;
+    this.duration = 0;
+    
     this.currentSong = song;
     this.isPlaying = false;
     
+    // 兼容处理
     if (!this.currentSong.ar && this.currentSong.artists) this.currentSong.ar = this.currentSong.artists;
     if (!this.currentSong.al && this.currentSong.album) this.currentSong.al = this.currentSong.album;
+
+    // 如果歌曲对象里已经有了播放 URL (来自解析接口)，直接播放
+    if (this.currentSong.url) {
+        this._playAudio(this.currentSong.url);
+        return;
+    }
 
     uni.showLoading({ title: '加载音频...' });
     try {
       const res = await getSongUrl(this.currentSong.id);
       if (res.data && res.data.url) {
-        audioManager.src = res.data.url;
-        audioManager.title = this.currentSong.name || '未知歌曲';
-        audioManager.singer = this.currentSong.ar ? this.currentSong.ar.map(a => a.name).join('/') : '未知歌手';
-        audioManager.coverImgUrl = this.currentSong.al ? this.currentSong.al.picUrl : '';
-        
-        // 修复：只传递 song_id
-        if (userStore.isLoggedIn) {
-          savePlayHistory({
-            song_id: this.currentSong.id
-          }).catch(err => console.error('Save history failed:', err));
-        }
-
+        this._playAudio(res.data.url);
       } else {
         uni.showToast({ title: '无法获取播放地址', icon: 'none' });
       }
@@ -66,6 +66,35 @@ export const playerStore = reactive({
       uni.showToast({ title: '播放出错', icon: 'none' });
     } finally {
       uni.hideLoading();
+    }
+  },
+
+  // 内部播放方法
+  _playAudio(url) {
+    audioManager.src = url;
+    audioManager.title = this.currentSong.name || '未知歌曲';
+    // 兼容 ar 数组和 ar_name 字符串
+    let singer = '未知歌手';
+    if (this.currentSong.ar_name) {
+        singer = this.currentSong.ar_name;
+    } else if (this.currentSong.ar) {
+        singer = this.currentSong.ar.map(a => a.name).join('/');
+    }
+    audioManager.singer = singer;
+    
+    // 兼容 al.picUrl 和 pic
+    let cover = '';
+    if (this.currentSong.pic) {
+        cover = this.currentSong.pic;
+    } else if (this.currentSong.al) {
+        cover = this.currentSong.al.picUrl;
+    }
+    audioManager.coverImgUrl = cover;
+    
+    if (userStore.isLoggedIn) {
+      savePlayHistory({
+        song_id: this.currentSong.id
+      }).catch(err => console.error('Save history failed:', err));
     }
   },
 
@@ -134,7 +163,10 @@ export const playerStore = reactive({
 // --- 事件监听 ---
 audioManager.onPlay(() => playerStore.isPlaying = true);
 audioManager.onPause(() => playerStore.isPlaying = false);
-audioManager.onStop(() => { playerStore.isPlaying = false; });
+audioManager.onStop(() => { 
+  playerStore.isPlaying = false; 
+  playerStore.currentTime = 0;
+});
 audioManager.onEnded(() => playerStore.playNext(true));
 audioManager.onTimeUpdate(() => {
   playerStore.currentTime = audioManager.currentTime;

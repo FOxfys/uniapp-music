@@ -19,7 +19,7 @@
         <text class="user-desc" v-if="userStore.isLoggedIn">音乐让生活更美好</text>
         <text class="user-desc" v-else>登录同步你的音乐世界</text>
       </view>
-      <view class="login-arrow" v-if="!userStore.isLoggedIn">></view>
+      <!-- 已移除 login-arrow -->
     </view>
 
     <!-- 功能入口 (网格布局) -->
@@ -63,7 +63,7 @@
             <text class="playlist-name">{{ item.name }}</text>
             <text class="playlist-meta">{{ item.song_count || 0 }} 首歌曲</text>
           </view>
-          <view class="playlist-arrow">></view>
+          <!-- 已移除 playlist-arrow -->
         </view>
       </view>
     </view>
@@ -356,10 +356,6 @@ const handleLogout = () => {
   font-size: 24rpx;
   color: rgba(255, 255, 255, 0.6);
 }
-.login-arrow {
-  font-size: 32rpx;
-  color: rgba(255, 255, 255, 0.4);
-}
 
 @keyframes pulse {
   0% { opacity: 0.4; transform: scale(1); }
@@ -470,11 +466,6 @@ const handleLogout = () => {
 .playlist-meta {
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.5);
-}
-.playlist-arrow {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.3);
-  margin-left: 20rpx;
 }
 
 @keyframes slideUp {

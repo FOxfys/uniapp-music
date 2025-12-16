@@ -60,6 +60,7 @@
 import { ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { playerStore } from '@/store/player.js';
+import { parseMusic } from '@/api/music.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
 onShow(() => {
@@ -118,13 +119,38 @@ const handleParse = async () => {
       url: `/pages/playlist/detail?id=${id}&type=music`
     });
   } else {
-    const tempSong = {
-      id: id,
-      name: '解析中...',
-      ar: [{ name: '未知歌手' }],
-      al: { picUrl: '' }
-    };
-    playerStore.setSongAndPlay(tempSong);
+    uni.showLoading({ title: '解析中...' });
+    try {
+      const res = await parseMusic({ ids: id, level: 'standard', type: 'json' });
+
+      if (res.status === 200) {
+        // 构造符合 playerStore 格式的歌曲对象
+        const song = {
+          id: id,
+          name: res.name,
+          url: res.url, // 直接传入 URL
+          ar: [{ name: res.ar_name }],
+          al: { name: res.al_name, picUrl: res.pic },
+          // 兼容旧字段
+          picUrl: res.pic,
+          artist: res.ar_name,
+          album: res.al_name
+        };
+
+        playerStore.setSongAndPlay(song);
+
+        uni.navigateTo({
+          url: '/pages/player/player'
+        });
+      } else {
+        uni.showToast({ title: res.message || '解析失败', icon: 'none' });
+      }
+    } catch (error) {
+      console.error(error);
+      uni.showToast({ title: '解析请求失败', icon: 'none' });
+    } finally {
+      uni.hideLoading();
+    }
   }
 };
 </script>

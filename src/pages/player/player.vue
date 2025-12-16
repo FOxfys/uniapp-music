@@ -137,7 +137,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted } from 'vue';
 import { onShow, onUnload } from '@dcloudio/uni-app';
 import { playerStore } from '@/store/player.js';
 import { userStore } from '@/store/user.js';
@@ -521,22 +521,21 @@ const addToPlaylist = async (playlistId) => {
   height: 100%;
   text-align: center;
   scroll-behavior: smooth;
-  /* 关键：用 padding 代替占位符 */
   padding-top: 300rpx;
   padding-bottom: 300rpx;
   box-sizing: border-box;
 }
 .lyric-line {
-  min-height: 100rpx; /* 加大行高 */
+  min-height: 100rpx;
   line-height: 1.8;
   padding: 15rpx 40rpx;
   color: #999;
-  font-size: 36rpx; /* 加大字号 */
+  font-size: 36rpx;
   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 .lyric-line.active {
   color: #00f2ea;
-  font-size: 50rpx; /* 加大高亮字号 */
+  font-size: 50rpx;
   font-weight: bold;
   text-shadow: 0 0 15px rgba(0, 242, 234, 0.5);
   transform: scale(1.05);

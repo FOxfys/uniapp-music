@@ -1,40 +1,50 @@
 <template>
   <view class="detail-container">
-    <!-- 背景层 -->
-    <image :src="playlistInfo.coverImgUrl || playlistInfo.picUrl" class="bg-image" mode="aspectFill"></image>
+    <!-- 背景层 (视差滚动) -->
+    <image
+      :src="playlistInfo.coverImgUrl || playlistInfo.picUrl"
+      class="bg-image"
+      mode="aspectFill"
+      :style="{ transform: `translateY(${bgTranslateY}px)` }"
+    ></image>
     <view class="bg-mask"></view>
 
-    <!-- 导航栏 (透明) -->
-    <view class="nav-bar">
+    <!-- 动态导航栏 -->
+    <view class="nav-bar" :style="{ backgroundColor: `rgba(18, 18, 18, ${navOpacity})` }">
       <view class="back-btn" @click="goBack">
         <view class="icon-back-arrow"></view>
       </view>
-      <!-- 已移除 nav-title -->
+      <text class="nav-title" :style="{ opacity: navTitleOpacity }">{{ playlistInfo.name }}</text>
     </view>
 
-    <scroll-view scroll-y class="scroll-content">
-      <!-- 头部信息 -->
-      <view class="header-section">
-        <view class="cover-box">
-          <image :src="playlistInfo.coverImgUrl || playlistInfo.picUrl" class="cover-image" mode="aspectFill"></image>
-          <view class="play-count">▷ {{ formatCount(playlistInfo.playCount || 0) }}</view>
-        </view>
-        <view class="info-box">
-          <view>
-            <text class="playlist-name">{{ playlistInfo.name }}</text>
-            <view class="creator-info">
-              <image :src="playlistInfo.creator?.avatarUrl" class="creator-avatar" mode="aspectFill"></image>
-              <text class="creator-name">{{ playlistInfo.creator?.nickname }}</text>
-            </view>
+    <scroll-view
+      scroll-y
+      class="scroll-content"
+      @scroll="onScroll"
+    >
+      <!-- 头部信息 (随滚动缩小) -->
+      <view class="header-wrapper" :style="{ transform: `scale(${headerScale})`, opacity: headerOpacity }">
+        <view class="header-section">
+          <view class="cover-box">
+            <image :src="playlistInfo.coverImgUrl || playlistInfo.picUrl" class="cover-image" mode="aspectFill"></image>
+            <view class="play-count">▷ {{ formatCount(playlistInfo.playCount || 0) }}</view>
           </view>
-          <!-- 简介区域：点击展开 -->
-          <view class="desc-box" @click="showDescModal = true">
-            <text class="playlist-desc">{{ playlistInfo.description || '暂无描述' }}</text>
+          <view class="info-box">
+            <view>
+              <text class="playlist-name">{{ playlistInfo.name }}</text>
+              <view class="creator-info">
+                <image :src="playlistInfo.creator?.avatarUrl" class="creator-avatar" mode="aspectFill"></image>
+                <text class="creator-name">{{ playlistInfo.creator?.nickname }}</text>
+              </view>
+            </view>
+            <view class="desc-box" @click="showDescModal = true">
+              <text class="playlist-desc">{{ playlistInfo.description || '暂无描述' }}</text>
+            </view>
           </view>
         </view>
       </view>
 
-      <!-- 操作栏：仅保留一键转存 -->
+      <!-- 操作栏 -->
       <view class="action-bar" v-if="pageType === 'music'">
         <view class="action-btn-large" @click="handleCollect">
           <text class="icon">❤</text>
@@ -45,22 +55,21 @@
 
       <!-- 歌曲列表容器 -->
       <view class="song-list-container">
-        <!-- 播放全部栏 (优化版) -->
-        <view class="play-all-header" @click="playAll">
-          <view class="play-all-btn">
+        <view class="play-all-header">
+          <view class="play-all-btn" @click="playAll">
             <text class="play-icon">▶</text>
             <text class="play-text">播放全部</text>
             <text class="count-text">({{ songList.length }})</text>
           </view>
         </view>
 
-        <!-- 列表 -->
         <view class="song-list">
           <view
             class="song-item"
             v-for="(song, index) in songList"
             :key="song.id"
             @click="playSong(song, index)"
+            :style="{ animationDelay: index * 0.03 + 's' }"
           >
             <view class="song-index" :class="{ 'top-three': index < 3 }">{{ index + 1 }}</view>
             <view class="song-info">
@@ -73,12 +82,17 @@
       </view>
     </scroll-view>
 
-    <!-- 导入进度弹窗 -->
+    <!-- 导入进度弹窗 (炫酷版) -->
     <view class="modal-mask" v-if="isImporting">
-      <view class="modal-content">
-        <text class="modal-title">正在转存...</text>
-        <progress :percent="importProgress" activeColor="#00f2ea" stroke-width="4" />
-        <text class="progress-text">{{ importStatus }}</text>
+      <view class="progress-modal">
+        <text class="progress-title">正在转存...</text>
+        <view class="progress-bar-bg">
+          <view class="progress-bar-fill" :style="{ width: importProgress + '%' }">
+            <view class="progress-glow"></view>
+          </view>
+        </view>
+        <text class="progress-info">{{ importStatus }}</text>
+        <text class="progress-percent">{{ Math.floor(importProgress) }}%</text>
       </view>
     </view>
 
@@ -113,11 +127,18 @@ const playlistInfo = ref({});
 const songList = ref([]);
 const pageType = ref('music');
 const currentPlaylistId = ref(null);
+const showDescModal = ref(false);
+
+// 动效相关
+const navOpacity = ref(0);
+const navTitleOpacity = ref(0);
+const headerScale = ref(1);
+const headerOpacity = ref(1);
+const bgTranslateY = ref(0);
 
 const isImporting = ref(false);
 const importProgress = ref(0);
 const importStatus = ref('');
-const showDescModal = ref(false);
 
 onLoad(async (options) => {
   const id = options.id;
@@ -153,6 +174,20 @@ onLoad(async (options) => {
     }
   }
 });
+
+const onScroll = (e) => {
+  const scrollTop = e.detail.scrollTop;
+  const threshold = 100;
+
+  navOpacity.value = Math.min(scrollTop / threshold, 1);
+  navTitleOpacity.value = Math.min(Math.max(0, scrollTop - threshold) / 50, 1);
+
+  const scale = Math.max(1 - scrollTop / (threshold * 2), 0.8);
+  headerScale.value = scale;
+  headerOpacity.value = Math.max(1 - scrollTop / threshold, 0);
+
+  bgTranslateY.value = scrollTop * 0.3;
+};
 
 const normalizeSong = (song) => {
   let name = song.name || song.song_name || '未知歌曲';
@@ -211,7 +246,6 @@ const handleCollect = async () => {
     if (createRes.code !== 200) throw new Error(createRes.message);
     const newPlaylistId = createRes.playlist_id;
 
-    // 分批并发
     const batchSize = 10;
     let addedCount = 0;
     for (let i = 0; i < songList.value.length; i += batchSize) {
@@ -327,6 +361,7 @@ const formatCount = (count) => {
   z-index: 1;
   filter: blur(40px);
   opacity: 0.6;
+  transition: transform 0.1s linear;
 }
 .bg-mask {
   position: absolute;
@@ -338,7 +373,7 @@ const formatCount = (count) => {
   z-index: 2;
 }
 
-/* 导航栏 */
+/* 动态导航栏 */
 .nav-bar {
   position: fixed;
   top: 0;
@@ -350,6 +385,7 @@ const formatCount = (count) => {
   padding: 0 30rpx;
   height: 88rpx;
   padding-top: env(safe-area-inset-top);
+  transition: background-color 0.3s;
 }
 .back-btn {
   width: 60rpx;
@@ -364,7 +400,14 @@ const formatCount = (count) => {
   border-bottom: 4rpx solid #fff;
   transform: rotate(45deg);
 }
-.nav-title { font-size: 32rpx; font-weight: bold; margin-left: 20rpx; }
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 32rpx;
+  font-weight: bold;
+  transition: opacity 0.3s;
+}
 
 /* 滚动内容 */
 .scroll-content {
@@ -372,10 +415,14 @@ const formatCount = (count) => {
   height: 0;
   position: relative;
   z-index: 10;
-  padding-top: calc(88rpx + env(safe-area-inset-top));
 }
 
 /* 头部信息 */
+.header-wrapper {
+  padding-top: calc(88rpx + env(safe-area-inset-top));
+  transition: transform 0.2s, opacity 0.2s;
+  transform-origin: top center;
+}
 .header-section {
   display: flex;
   padding: 40rpx;
@@ -492,11 +539,11 @@ const formatCount = (count) => {
   padding-bottom: 120rpx;
 }
 
-/* 播放全部栏 (优化版) */
+/* 播放全部栏 */
 .play-all-header {
   padding: 30rpx;
   position: sticky;
-  top: 0;
+  top: calc(88rpx + env(safe-area-inset-top)); /* 粘性定位，吸附在导航栏下方 */
   background-color: #121212;
   z-index: 20;
   border-top-left-radius: 40rpx;
@@ -536,6 +583,12 @@ const formatCount = (count) => {
   align-items: center;
   padding: 20rpx 30rpx;
   margin-bottom: 10rpx;
+  animation: slideUp 0.5s ease-out forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+@keyframes slideUp {
+  to { opacity: 1; transform: translateY(0); }
 }
 .song-item:active {
   background-color: rgba(255,255,255,0.05);
@@ -581,11 +634,75 @@ const formatCount = (count) => {
   font-size: 36rpx;
 }
 
-/* 导入进度弹窗 */
-.modal-mask { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 999; display: flex; justify-content: center; align-items: center; }
-.modal-content { width: 70%; background-color: #2a2a2a; border-radius: 20rpx; padding: 40rpx; text-align: center; }
-.modal-title { font-size: 36rpx; font-weight: bold; color: #fff; margin-bottom: 40rpx; display: block; }
-.progress-text { font-size: 28rpx; color: #ccc; margin-top: 20rpx; display: block; }
+/* 弹窗样式 */
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.6);
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(5px);
+}
+
+/* 进度弹窗 */
+.progress-modal {
+  width: 70%;
+  background-color: #2a2a2a;
+  border-radius: 30rpx;
+  padding: 50rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.progress-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 40rpx;
+}
+.progress-bar-bg {
+  width: 100%;
+  height: 16rpx;
+  background-color: rgba(255,255,255,0.1);
+  border-radius: 10rpx;
+  overflow: hidden;
+  margin-bottom: 20rpx;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00f2ea, #00c2b8);
+  border-radius: 10rpx;
+  position: relative;
+  transition: width 0.3s ease;
+}
+.progress-glow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20rpx;
+  height: 100%;
+  background: #fff;
+  box-shadow: 0 0 10px #fff;
+  opacity: 0.8;
+}
+.progress-info {
+  font-size: 26rpx;
+  color: #aaa;
+  margin-bottom: 10rpx;
+}
+.progress-percent {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: #00f2ea;
+  font-family: monospace;
+}
 
 /* 简介详情弹窗 */
 .desc-modal-mask {
