@@ -7,9 +7,9 @@
     <!-- 导航栏 (透明) -->
     <view class="nav-bar">
       <view class="back-btn" @click="goBack">
-        <text class="icon-back">﹀</text>
+        <view class="icon-back-arrow"></view>
       </view>
-      <text class="nav-title">歌单</text>
+      <!-- 已移除 nav-title -->
     </view>
 
     <scroll-view scroll-y class="scroll-content">
@@ -20,14 +20,16 @@
           <view class="play-count">▷ {{ formatCount(playlistInfo.playCount || 0) }}</view>
         </view>
         <view class="info-box">
-          <text class="playlist-name">{{ playlistInfo.name }}</text>
-          <view class="creator-info">
-            <image :src="playlistInfo.creator?.avatarUrl" class="creator-avatar" mode="aspectFill"></image>
-            <text class="creator-name">{{ playlistInfo.creator?.nickname }}</text>
+          <view>
+            <text class="playlist-name">{{ playlistInfo.name }}</text>
+            <view class="creator-info">
+              <image :src="playlistInfo.creator?.avatarUrl" class="creator-avatar" mode="aspectFill"></image>
+              <text class="creator-name">{{ playlistInfo.creator?.nickname }}</text>
+            </view>
           </view>
-          <view class="desc-box">
+          <!-- 简介区域：点击展开 -->
+          <view class="desc-box" @click="showDescModal = true">
             <text class="playlist-desc">{{ playlistInfo.description || '暂无描述' }}</text>
-            <text class="icon-arrow">></text>
           </view>
         </view>
       </view>
@@ -43,11 +45,13 @@
 
       <!-- 歌曲列表容器 -->
       <view class="song-list-container">
-        <!-- 播放全部栏 -->
-        <view class="play-all-bar" @click="playAll">
-          <view class="play-icon-circle">▶</view>
-          <text class="play-text">播放全部</text>
-          <text class="count-text">(共{{ songList.length }}首)</text>
+        <!-- 播放全部栏 (优化版) -->
+        <view class="play-all-header" @click="playAll">
+          <view class="play-all-btn">
+            <text class="play-icon">▶</text>
+            <text class="play-text">播放全部</text>
+            <text class="count-text">({{ songList.length }})</text>
+          </view>
         </view>
 
         <!-- 列表 -->
@@ -78,6 +82,21 @@
       </view>
     </view>
 
+    <!-- 简介详情弹窗 -->
+    <view class="desc-modal-mask" v-if="showDescModal" @click="showDescModal = false">
+      <view class="desc-modal-content" @click.stop>
+        <image :src="playlistInfo.coverImgUrl || playlistInfo.picUrl" class="desc-bg" mode="aspectFill"></image>
+        <view class="desc-mask"></view>
+        <view class="desc-text-wrapper">
+          <text class="desc-title">{{ playlistInfo.name }}</text>
+          <scroll-view scroll-y class="desc-scroll">
+            <text class="desc-full-text">{{ playlistInfo.description || '暂无描述' }}</text>
+          </scroll-view>
+        </view>
+        <view class="desc-close" @click="showDescModal = false">×</view>
+      </view>
+    </view>
+
     <MusicPlayerWidget />
   </view>
 </template>
@@ -98,6 +117,7 @@ const currentPlaylistId = ref(null);
 const isImporting = ref(false);
 const importProgress = ref(0);
 const importStatus = ref('');
+const showDescModal = ref(false);
 
 onLoad(async (options) => {
   const id = options.id;
@@ -181,27 +201,30 @@ const handleCollect = async () => {
   importProgress.value = 0;
 
   try {
-    // 修复：构造正确的参数对象
     const createParams = {
       name: playlistInfo.value.name,
       description: playlistInfo.value.description || '',
-      cover_url: playlistInfo.value.coverImgUrl || '' // 尝试直接带上封面
+      cover_url: playlistInfo.value.coverImgUrl || ''
     };
 
     const createRes = await createPlaylist(createParams);
     if (createRes.code !== 200) throw new Error(createRes.message);
     const newPlaylistId = createRes.playlist_id;
 
-    for (let i = 0; i < songList.value.length; i++) {
-      const song = songList.value[i];
-      importStatus.value = `正在添加: ${i + 1} / ${songList.value.length}`;
-      await addSongToPlaylist(newPlaylistId, { song_id: song.id });
-      importProgress.value = ((i + 1) / songList.value.length) * 100;
+    // 分批并发
+    const batchSize = 10;
+    let addedCount = 0;
+    for (let i = 0; i < songList.value.length; i += batchSize) {
+      const batch = songList.value.slice(i, i + batchSize);
+      const promises = batch.map(song => addSongToPlaylist(newPlaylistId, { song_id: song.id }));
+
+      await Promise.all(promises);
+
+      addedCount += batch.length;
+      importStatus.value = `正在添加: ${addedCount} / ${songList.value.length}`;
+      importProgress.value = (addedCount / songList.value.length) * 100;
     }
 
-    // 如果创建时没带上封面（比如封面是网易云的URL，后端可能没存），这里再更新一次
-    // 但其实 createPlaylist 已经带了 cover_url，这里可以视情况保留或删除
-    // 为了保险，如果 createParams.cover_url 是空的，再尝试更新一次
     if (!createParams.cover_url) {
         const firstSongWithCover = songList.value.find(s => s.picUrl);
         if (firstSongWithCover) {
@@ -326,7 +349,7 @@ const formatCount = (count) => {
   align-items: center;
   padding: 0 30rpx;
   height: 88rpx;
-  padding-top: calc(20rpx + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
 }
 .back-btn {
   width: 60rpx;
@@ -334,7 +357,13 @@ const formatCount = (count) => {
   display: flex;
   align-items: center;
 }
-.icon-back { font-size: 40rpx; transform: rotate(90deg); color: #fff; }
+.icon-back-arrow {
+  width: 24rpx;
+  height: 24rpx;
+  border-left: 4rpx solid #fff;
+  border-bottom: 4rpx solid #fff;
+  transform: rotate(45deg);
+}
 .nav-title { font-size: 32rpx; font-weight: bold; margin-left: 20rpx; }
 
 /* 滚动内容 */
@@ -343,7 +372,7 @@ const formatCount = (count) => {
   height: 0;
   position: relative;
   z-index: 10;
-  padding-top: calc(100rpx + env(safe-area-inset-top));
+  padding-top: calc(88rpx + env(safe-area-inset-top));
 }
 
 /* 头部信息 */
@@ -356,10 +385,11 @@ const formatCount = (count) => {
   position: relative;
   width: 240rpx;
   height: 240rpx;
-  margin-right: 40rpx;
+  margin-right: 30rpx;
   border-radius: 20rpx;
   overflow: hidden;
   box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+  flex-shrink: 0;
 }
 .cover-image { width: 100%; height: 100%; }
 .play-count {
@@ -380,6 +410,7 @@ const formatCount = (count) => {
   flex-direction: column;
   height: 240rpx;
   justify-content: space-between;
+  overflow: hidden;
 }
 .playlist-name {
   font-size: 36rpx;
@@ -389,11 +420,13 @@ const formatCount = (count) => {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 15rpx;
 }
 .creator-info {
   display: flex;
   align-items: center;
-  margin-top: 20rpx;
+  margin-bottom: 15rpx;
 }
 .creator-avatar {
   width: 50rpx;
@@ -408,7 +441,8 @@ const formatCount = (count) => {
 .desc-box {
   display: flex;
   align-items: center;
-  margin-top: auto;
+  max-width: 100%;
+  overflow: hidden;
 }
 .playlist-desc {
   font-size: 22rpx;
@@ -416,11 +450,10 @@ const formatCount = (count) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 300rpx;
+  flex: 1;
 }
-.icon-arrow { font-size: 22rpx; color: rgba(255,255,255,0.5); margin-left: 10rpx; }
 
-/* 操作栏：大按钮 */
+/* 操作栏 */
 .action-bar {
   padding: 0 40rpx 40rpx;
   display: flex;
@@ -459,10 +492,8 @@ const formatCount = (count) => {
   padding-bottom: 120rpx;
 }
 
-/* 播放全部栏 */
-.play-all-bar {
-  display: flex;
-  align-items: center;
+/* 播放全部栏 (优化版) */
+.play-all-header {
   padding: 30rpx;
   position: sticky;
   top: 0;
@@ -471,26 +502,31 @@ const formatCount = (count) => {
   border-top-left-radius: 40rpx;
   border-top-right-radius: 40rpx;
 }
-.play-icon-circle {
-  width: 50rpx;
-  height: 50rpx;
-  background-color: #00f2ea;
-  border-radius: 50%;
-  color: #000;
+.play-all-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  margin-right: 20rpx;
+  background-color: #2a2a2a;
+  padding: 20rpx 30rpx;
+  border-radius: 50rpx;
+  width: fit-content;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+.play-all-btn:active {
+  background-color: #333;
+}
+.play-icon {
+  color: #00f2ea;
+  font-size: 32rpx;
+  margin-right: 15rpx;
 }
 .play-text {
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: bold;
   color: #fff;
 }
 .count-text {
   font-size: 24rpx;
-  color: #666;
+  color: #888;
   margin-left: 10rpx;
 }
 
@@ -517,6 +553,8 @@ const formatCount = (count) => {
 }
 .song-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   margin-left: 20rpx;
   overflow: hidden;
 }
@@ -527,6 +565,7 @@ const formatCount = (count) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
 }
 .song-detail {
   font-size: 22rpx;
@@ -534,6 +573,7 @@ const formatCount = (count) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
 }
 .delete-btn {
   padding: 10rpx 20rpx;
@@ -541,9 +581,90 @@ const formatCount = (count) => {
   font-size: 36rpx;
 }
 
-/* 弹窗样式 */
+/* 导入进度弹窗 */
 .modal-mask { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 999; display: flex; justify-content: center; align-items: center; }
 .modal-content { width: 70%; background-color: #2a2a2a; border-radius: 20rpx; padding: 40rpx; text-align: center; }
 .modal-title { font-size: 36rpx; font-weight: bold; color: #fff; margin-bottom: 40rpx; display: block; }
 .progress-text { font-size: 28rpx; color: #ccc; margin-top: 20rpx; display: block; }
+
+/* 简介详情弹窗 */
+.desc-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.8);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(10px);
+}
+.desc-modal-content {
+  width: 80%;
+  height: 70%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.desc-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 30rpx;
+  opacity: 0.3;
+}
+.desc-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  border-radius: 30rpx;
+}
+.desc-text-wrapper {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  height: 100%;
+  padding: 60rpx 40rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.desc-title {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 40rpx;
+  text-align: center;
+}
+.desc-scroll {
+  flex: 1;
+  height: 0;
+}
+.desc-full-text {
+  font-size: 30rpx;
+  color: #ddd;
+  line-height: 1.8;
+  text-align: justify;
+}
+.desc-close {
+  position: absolute;
+  bottom: -100rpx;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.5);
+  color: #fff;
+  font-size: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 </style>

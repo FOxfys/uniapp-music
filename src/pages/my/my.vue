@@ -1,52 +1,71 @@
 <template>
   <view class="my-container">
-    <!-- 登录/用户信息 -->
-    <view class="user-profile" @click="handleLogin">
-      <image class="avatar" :src="userStore.isLoggedIn ? (userStore.userInfo.avatarUrl || '/static/default-avatar.png') : '/static/default-avatar.png'"></image>
-      <text class="nickname">{{ userStore.isLoggedIn ? userStore.userInfo.username : '点击登录' }}</text>
+    <!-- 动态背景 -->
+    <view class="bg-gradient"></view>
+    <view class="bg-noise"></view>
+
+    <!-- 用户信息卡片 -->
+    <view class="user-card" @click="handleLogin">
+      <view class="avatar-wrapper">
+        <image
+          class="avatar"
+          :src="userStore.isLoggedIn ? (userStore.userInfo.avatarUrl || '/static/default-avatar.png') : '/static/default-avatar.png'"
+          mode="aspectFill"
+        ></image>
+        <view class="avatar-glow"></view>
+      </view>
+      <view class="user-info">
+        <text class="nickname">{{ userStore.isLoggedIn ? userStore.userInfo.username : '点击登录' }}</text>
+        <text class="user-desc" v-if="userStore.isLoggedIn">音乐让生活更美好</text>
+        <text class="user-desc" v-else>登录同步你的音乐世界</text>
+      </view>
+      <view class="login-arrow" v-if="!userStore.isLoggedIn">></view>
     </view>
 
-    <!-- 功能列表 -->
-    <view class="action-list">
+    <!-- 功能入口 (网格布局) -->
+    <view class="action-grid">
       <view class="action-item" @click="goToHistory">
-        <text>播放历史</text>
-        <text class="arrow">></text>
+        <view class="icon-box history-icon">🕒</view>
+        <text class="action-text">播放历史</text>
       </view>
       <view class="action-item" @click="showCreateModal">
-        <text>创建歌单</text>
-        <text class="arrow">></text>
+        <view class="icon-box create-icon">➕</view>
+        <text class="action-text">创建歌单</text>
       </view>
-       <view class="action-item" @click="goToAbout">
-        <text>关于我们</text>
-        <text class="arrow">></text>
+      <view class="action-item" @click="goToAbout">
+        <view class="icon-box about-icon">ℹ️</view>
+        <text class="action-text">关于我们</text>
+      </view>
+      <view class="action-item" @click="handleLogout" v-if="userStore.isLoggedIn">
+        <view class="icon-box logout-icon">🚪</view>
+        <text class="action-text">退出登录</text>
       </view>
     </view>
 
     <!-- 我的歌单列表 -->
     <view class="playlist-section" v-if="userStore.isLoggedIn">
       <view class="section-header">
-        <text class="section-title">我的歌单 ({{ myPlaylists.length }})</text>
+        <text class="section-title">我的歌单</text>
+        <text class="playlist-count">{{ myPlaylists.length }} 个</text>
       </view>
+
       <view class="playlist-list">
         <view
-          class="playlist-item"
-          v-for="item in myPlaylists"
+          class="playlist-card"
+          v-for="(item, index) in myPlaylists"
           :key="item.id"
           @click="goToPlaylist(item.id)"
           @longpress="handleLongPress(item)"
+          :style="{ animationDelay: index * 0.05 + 's' }"
         >
           <image :src="item.cover_url || '/static/default-avatar.png'" class="playlist-cover" mode="aspectFill"></image>
           <view class="playlist-info">
             <text class="playlist-name">{{ item.name }}</text>
-            <text class="playlist-count">{{ item.song_count || 0 }} 首</text>
+            <text class="playlist-meta">{{ item.song_count || 0 }} 首歌曲</text>
           </view>
+          <view class="playlist-arrow">></view>
         </view>
       </view>
-    </view>
-
-    <!-- 退出登录按钮 -->
-    <view class="logout-section" v-if="userStore.isLoggedIn">
-      <button class="logout-btn" @click="handleLogout">退出登录</button>
     </view>
 
     <!-- 创建歌单弹窗 -->
@@ -182,11 +201,9 @@ const handleCreatePlaylist = async () => {
       isModalVisible.value = false;
       fetchUserPlaylists();
     } else {
-      // 后端返回400，说明是明确的业务错误
       uni.showToast({ title: res.message || '创建失败', icon: 'none' });
     }
   } catch (error) {
-    // 后端返回500，大概率是重名冲突
     if (error && error.message && error.message.includes('创建失败')) {
         uni.showToast({ title: '歌单名称可能已被使用', icon: 'none', duration: 2000 });
     } else {
@@ -259,96 +276,209 @@ const handleLogout = () => {
 
 <style scoped>
 .my-container {
-  padding: 40rpx;
+  min-height: 100vh;
+  background-color: #121212;
   color: #fff;
+  padding: 40rpx 30rpx;
   padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  position: relative;
+  overflow: hidden;
 }
-.user-profile {
+
+/* 动态背景 */
+.bg-gradient {
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle at 50% 0%, #1a2a3a, #121212 60%);
+  z-index: 0;
+}
+.bg-noise {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+/* 用户信息卡片 */
+.user-card {
+  position: relative;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  margin-bottom: 60rpx;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  padding: 40rpx;
+  border-radius: 30rpx;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 40rpx;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.avatar-wrapper {
+  position: relative;
+  margin-right: 30rpx;
 }
 .avatar {
-  width: 150rpx;
-  height: 150rpx;
+  width: 120rpx;
+  height: 120rpx;
   border-radius: 50%;
-  margin-bottom: 20rpx;
-  border: 2px solid #00f2ea;
+  border: 4rpx solid rgba(255, 255, 255, 0.2);
+}
+.avatar-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(0, 242, 234, 0.4);
+  animation: pulse 3s infinite;
+}
+.user-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 .nickname {
-  font-size: 32rpx;
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 10rpx;
 }
-.action-list {
-  background-color: #1a1a1a;
-  border-radius: 15rpx;
-  margin-bottom: 40rpx;
+.user-desc {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.6);
+}
+.login-arrow {
+  font-size: 32rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+@keyframes pulse {
+  0% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+  100% { opacity: 0.4; transform: scale(1); }
+}
+
+/* 功能入口 (网格) */
+.action-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20rpx;
+  margin-bottom: 50rpx;
 }
 .action-item {
   display: flex;
-  justify-content: space-between;
-  padding: 30rpx;
-  border-bottom: 1px solid #2a2a2a;
-  cursor: pointer;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 20rpx 10rpx;
+  border-radius: 20rpx;
+  transition: background 0.2s;
 }
-.action-item:last-child {
-  border-bottom: none;
+.action-item:active {
+  background: rgba(255, 255, 255, 0.08);
 }
-.arrow {
-  color: #555;
+.icon-box {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  margin-bottom: 15rpx;
+  background: rgba(255, 255, 255, 0.05);
+}
+.history-icon { color: #00f2ea; }
+.create-icon { color: #ff0055; }
+.about-icon { color: #ffcc00; }
+.logout-icon { color: #999; }
+.action-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* 歌单列表 */
 .playlist-section {
-  margin-bottom: 40rpx;
+  position: relative;
+  z-index: 1;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 30rpx;
+  padding: 0 10rpx;
 }
 .section-title {
-  font-size: 30rpx;
-  color: #aaa;
-  margin-bottom: 20rpx;
-  display: block;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #fff;
+  border-left: 6rpx solid #00f2ea;
+  padding-left: 20rpx;
 }
+.playlist-count {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .playlist-list {
-  background-color: #1a1a1a;
-  border-radius: 15rpx;
-}
-.playlist-item {
   display: flex;
-  padding: 20rpx;
-  border-bottom: 1px solid #2a2a2a;
-  align-items: center;
+  flex-direction: column;
+  gap: 20rpx;
 }
-.playlist-item:last-child {
-  border-bottom: none;
+.playlist-card {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 20rpx;
+  border-radius: 20rpx;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  animation: slideUp 0.5s ease-out forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+.playlist-card:active {
+  background: rgba(255, 255, 255, 0.08);
 }
 .playlist-cover {
   width: 100rpx;
   height: 100rpx;
-  border-radius: 10rpx;
-  margin-right: 20rpx;
-  background-color: #333;
+  border-radius: 15rpx;
+  margin-right: 25rpx;
 }
 .playlist-info {
+  flex: 1;
   display: flex;
   flex-direction: column;
 }
 .playlist-name {
   font-size: 30rpx;
   color: #fff;
-  margin-bottom: 10rpx;
+  margin-bottom: 8rpx;
 }
-.playlist-count {
+.playlist-meta {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+.playlist-arrow {
   font-size: 24rpx;
-  color: #666;
+  color: rgba(255, 255, 255, 0.3);
+  margin-left: 20rpx;
 }
 
-.logout-section {
-  padding: 0 20rpx;
-}
-.logout-btn {
-  background-color: #333;
-  color: #ff5555;
-  border: 1px solid #ff5555;
+@keyframes slideUp {
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* 弹窗样式 */
@@ -363,36 +493,39 @@ const handleLogout = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  backdrop-filter: blur(5px);
 }
 .modal-content {
   width: 80%;
   background-color: #2a2a2a;
-  border-radius: 20rpx;
-  padding: 40rpx;
+  border-radius: 30rpx;
+  padding: 50rpx;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 .modal-title {
   font-size: 36rpx;
   font-weight: bold;
   color: #fff;
-  margin-bottom: 30rpx;
+  margin-bottom: 40rpx;
   display: block;
   text-align: center;
 }
 .modal-input {
-  background-color: #1a1a1a;
+  background-color: rgba(0,0,0,0.3);
   color: #fff;
-  padding: 20rpx;
-  border-radius: 10rpx;
+  padding: 25rpx;
+  border-radius: 15rpx;
   margin-bottom: 20rpx;
-  border: 1px solid #333;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 .modal-textarea {
-  background-color: #1a1a1a;
+  background-color: rgba(0,0,0,0.3);
   color: #fff;
-  padding: 20rpx;
-  border-radius: 10rpx;
+  padding: 25rpx;
+  border-radius: 15rpx;
   margin-bottom: 40rpx;
-  border: 1px solid #333;
+  border: 1px solid rgba(255,255,255,0.1);
   height: 150rpx;
   width: 100%;
   box-sizing: border-box;
@@ -400,32 +533,39 @@ const handleLogout = () => {
 .modal-btns {
   display: flex;
   justify-content: space-between;
+  gap: 30rpx;
 }
 .modal-btn {
-  padding: 15rpx 40rpx;
-  border-radius: 10rpx;
+  flex: 1;
+  padding: 20rpx 0;
+  border-radius: 50rpx;
   font-size: 30rpx;
+  text-align: center;
 }
 .modal-btn.cancel {
+  background-color: rgba(255,255,255,0.1);
   color: #aaa;
 }
 .modal-btn.confirm {
-  color: #00f2ea;
+  background: linear-gradient(90deg, #00f2ea, #00c2b8);
+  color: #121212;
+  font-weight: bold;
 }
 
 /* 封面上传 */
 .cover-upload-section {
   display: flex;
   justify-content: center;
-  margin-bottom: 30rpx;
+  margin-bottom: 40rpx;
 }
 .cover-preview {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 15rpx;
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 20rpx;
   overflow: hidden;
   position: relative;
-  border: 2px dashed #555;
+  border: 2px dashed rgba(255,255,255,0.3);
+  background-color: rgba(0,0,0,0.2);
 }
 .cover-preview image {
   width: 100%;
@@ -440,6 +580,6 @@ const handleLogout = () => {
   color: #fff;
   font-size: 20rpx;
   text-align: center;
-  padding: 4rpx 0;
+  padding: 6rpx 0;
 }
 </style>

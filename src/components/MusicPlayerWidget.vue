@@ -12,7 +12,7 @@
     <view class="glow-ring" :class="{ playing: playerStore.isPlaying }"></view>
 
     <image
-      :src="playerStore.currentSong.al?.picUrl || '/static/default-avatar.png'"
+      :src="coverUrl"
       class="cover-image"
       :class="{ playing: playerStore.isPlaying }"
       mode="aspectFill"
@@ -21,12 +21,23 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue';
+import { reactive, computed } from 'vue';
 import { playerStore } from '@/store/player.js';
 
 const position = reactive({
   x: playerStore.widgetPosition.x,
   y: playerStore.widgetPosition.y
+});
+
+// 修复：使用计算属性获取封面，与播放页逻辑保持一致
+const coverUrl = computed(() => {
+  const song = playerStore.currentSong;
+  if (!song) return '/static/default-avatar.png';
+
+  // 优先使用 al.picUrl (网易云原生结构)
+  // 其次使用 cover_url (后端返回的扁平化结构)
+  // 最后使用 picUrl (备用字段)
+  return song.al?.picUrl || song.cover_url || song.picUrl || '/static/default-avatar.png';
 });
 
 const touchStart = reactive({ x: 0, y: 0 });
@@ -46,7 +57,6 @@ const onTouchMove = (e) => {
   const currentX = e.touches[0].clientX;
   const currentY = e.touches[0].clientY;
 
-  // 只有移动距离超过 5px 才算是拖拽，防止误触
   if (Math.abs(currentX - startX) > 5 || Math.abs(currentY - startY) > 5) {
     isDragging = true;
     position.x = currentX - touchStart.x;

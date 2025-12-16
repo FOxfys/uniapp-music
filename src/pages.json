@@ -33,7 +33,8 @@
 		{
 			"path": "pages/playlist/detail",
 			"style": {
-				"navigationBarTitleText": "歌单详情"
+				"navigationBarTitleText": "歌单详情",
+				"navigationStyle": "custom"
 			}
 		},
 		{
@@ -59,7 +60,8 @@
 		{
 			"path": "pages/my/history",
 			"style": {
-				"navigationBarTitleText": "播放历史"
+				"navigationBarTitleText": "播放历史",
+				"navigationStyle": "custom"
 			}
 		}
 	],

@@ -25,7 +25,7 @@
       duration="400"
     >
       <!-- 封面页 -->
-      <swiper-item @click="swiperIndex = 1">
+      <swiper-item>
         <view class="cover-wrapper">
           <view class="cover-glow" :class="{ playing: playerStore.isPlaying }"></view>
           <view class="cover-disc" :class="{ playing: playerStore.isPlaying }">
@@ -36,26 +36,28 @@
       </swiper-item>
 
       <!-- 歌词页 -->
-      <swiper-item @click="swiperIndex = 0">
+      <swiper-item>
         <scroll-view
           scroll-y
           class="lyric-scroll"
-          :scroll-top="lyricScrollTop"
+          :scroll-into-view="`lyric-line-${lyricIndex}`"
           scroll-with-animation
+          @touchstart="isUserScrolling = true"
+          @touchend="resumeAutoScroll"
         >
-          <view class="lyric-placeholder"></view>
           <view v-if="lyric.length === 0" class="lyric-line no-lyric">
             {{ debugMsg || '纯音乐，请欣赏' }}
           </view>
           <view
+            :id="`lyric-line-${index}`"
             class="lyric-line"
             :class="{ active: index === lyricIndex }"
             v-for="(line, index) in lyric"
             :key="index"
+            @click="seekToLyric(line.time)"
           >
             {{ line.text }}
           </view>
-          <view class="lyric-placeholder"></view>
         </scroll-view>
       </swiper-item>
     </swiper>
@@ -145,21 +147,32 @@ import { getUserPlaylists, addSongToPlaylist } from '@/api/playlist.js';
 const swiperIndex = ref(0);
 const lyric = ref([]);
 const lyricIndex = ref(0);
-const lyricScrollTop = ref(0);
 const debugMsg = ref('');
 let isSeeking = false;
 const coverUrl = ref('/static/default-avatar.png');
 
-// 收藏相关
 const isFavModalVisible = ref(false);
 const myPlaylists = ref([]);
+const isUserScrolling = ref(false);
+let userScrollTimer = null;
 
-const fetchCover = async (id) => {
-  if (!id) return;
+const fetchCover = async (song) => {
+  if (!song || !song.id) return;
+
+  const existingCover = song.al?.picUrl || song.cover_url;
+  if (existingCover) {
+    coverUrl.value = existingCover;
+    return;
+  }
+
   try {
-    const res = await getSongCover(id);
+    const res = await getSongCover(song.id);
     if (res.data && res.data.picUrl) {
       coverUrl.value = res.data.picUrl;
+      if (playerStore.currentSong && playerStore.currentSong.id === song.id) {
+        if (!playerStore.currentSong.al) playerStore.currentSong.al = {};
+        playerStore.currentSong.al.picUrl = res.data.picUrl;
+      }
     }
   } catch (error) {
     console.error('Fetch cover failed:', error);
@@ -233,6 +246,7 @@ const progress = computed(() => {
 let sliderValue = 0;
 const onSliderChanging = (e) => {
   isSeeking = true;
+  isUserScrolling.value = true;
   sliderValue = e.detail.value;
 };
 
@@ -240,16 +254,35 @@ const onSliderChange = (e) => {
   const newTime = (e.detail.value / 100) * playerStore.duration;
   playerStore.seek(newTime);
   isSeeking = false;
+  resumeAutoScroll();
+};
+
+const seekToLyric = (time) => {
+  if (time >= 0) {
+    playerStore.seek(time);
+    if (!playerStore.isPlaying) {
+      playerStore.play();
+    }
+    isUserScrolling.value = false;
+    uni.showToast({ title: '已跳转', icon: 'none', duration: 1000 });
+  }
+};
+
+const resumeAutoScroll = () => {
+  if (userScrollTimer) clearTimeout(userScrollTimer);
+  userScrollTimer = setTimeout(() => {
+    isUserScrolling.value = false;
+  }, 2000);
 };
 
 let stopWatch = null;
 onShow(() => {
-  const songId = playerStore.currentSong?.id;
-  fetchLyric(songId);
-  fetchCover(songId);
+  const song = playerStore.currentSong;
+  fetchLyric(song?.id);
+  fetchCover(song);
 
   stopWatch = watch(() => playerStore.currentTime, (newTime) => {
-    if (isSeeking || lyric.value.length === 0) return;
+    if (isSeeking || lyric.value.length === 0 || isUserScrolling.value) return;
 
     let newIndex = -1;
     for (let i = 0; i < lyric.value.length; i++) {
@@ -265,7 +298,6 @@ onShow(() => {
 
     if (lyricIndex.value !== newIndex) {
       lyricIndex.value = newIndex;
-      lyricScrollTop.value = Math.max(0, newIndex * 80 - 250); // 调整滚动高度
     }
   });
 });
@@ -277,7 +309,7 @@ onUnload(() => {
 watch(() => playerStore.currentSong?.id, (newId, oldId) => {
   if (newId && newId !== oldId) {
     fetchLyric(newId);
-    fetchCover(newId);
+    fetchCover(playerStore.currentSong);
   }
 });
 
@@ -294,7 +326,6 @@ const formatTime = (time = 0) => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-// --- 收藏功能 ---
 const showAddToPlaylist = async () => {
   if (!userStore.isLoggedIn) {
     uni.showToast({ title: '请先登录', icon: 'none' });
@@ -388,7 +419,7 @@ const addToPlaylist = async (playlistId) => {
   align-items: center;
   padding: 0 30rpx;
   height: 100rpx;
-  padding-top: calc(40rpx + env(safe-area-inset-top));
+  padding-top: calc(60rpx + env(safe-area-inset-top));
 }
 .back-btn, .right-placeholder {
   width: 80rpx;
@@ -486,24 +517,29 @@ const addToPlaylist = async (playlistId) => {
 @keyframes pulse { 0% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.2; } 100% { transform: scale(1); opacity: 0.5; } }
 
 /* 歌词样式优化 */
-.lyric-scroll { height: 100%; text-align: center; }
-.lyric-placeholder { height: 50%; }
+.lyric-scroll {
+  height: 100%;
+  text-align: center;
+  scroll-behavior: smooth;
+  /* 关键：用 padding 代替占位符 */
+  padding-top: 300rpx;
+  padding-bottom: 300rpx;
+  box-sizing: border-box;
+}
 .lyric-line {
-  min-height: 80rpx; /* 增加行高 */
+  min-height: 100rpx; /* 加大行高 */
   line-height: 1.8;
-  padding: 20rpx 40rpx;
-  color: rgba(255,255,255,0.6); /* 更亮的灰色 */
-  font-size: 32rpx; /* 加大字号 */
+  padding: 15rpx 40rpx;
+  color: #999;
+  font-size: 36rpx; /* 加大字号 */
   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  filter: blur(0.5px);
 }
 .lyric-line.active {
   color: #00f2ea;
-  font-size: 44rpx; /* 高亮字号加大 */
+  font-size: 50rpx; /* 加大高亮字号 */
   font-weight: bold;
-  text-shadow: 0 0 20px rgba(0, 242, 234, 0.6); /* 更强的光晕 */
-  filter: blur(0);
-  transform: scale(1.1);
+  text-shadow: 0 0 15px rgba(0, 242, 234, 0.5);
+  transform: scale(1.05);
 }
 .no-lyric { color: #888; margin-top: 200rpx; }
 
