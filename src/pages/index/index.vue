@@ -33,7 +33,7 @@
       </view>
     </view>
 
-    <scroll-view scroll-y class="scroll-content" @scrolltolower="onReachBottom">
+    <scroll-view scroll-y class="scroll-content" @scrolltolower="handleScrollToLower">
       <!-- 2. 3D 轮播图 -->
       <swiper
         class="banner-swiper"
@@ -101,7 +101,6 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { onReachBottom } from '@dcloudio/uni-app'; // 修复：导入 onReachBottom
 import { getHotPlaylists } from '@/api/music.js';
 import { userStore } from '@/store/user.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
@@ -138,11 +137,12 @@ const fetchData = async () => {
     }
   } catch (error) {
     console.error('Failed to fetch hot playlists:', error);
+    uni.showToast({ title: '首页数据加载失败', icon: 'none' });
   }
 };
 
-// 修复：使用 onReachBottom 注册回调
-onReachBottom(() => {
+// 修复：使用 scroll-view 的事件
+const handleScrollToLower = () => {
   if (loadingMore.value) return;
   if (displayedPlaylist.value.length >= allPlaylists.value.length) return;
 
@@ -151,7 +151,7 @@ onReachBottom(() => {
     page.value++;
     loadingMore.value = false;
   }, 500);
-});
+};
 
 const onBannerChange = (e) => {
   currentBannerIndex.value = e.detail.current;
@@ -178,7 +178,9 @@ const goToPlaylist = (id) => {
 };
 
 onMounted(() => {
-  fetchData();
+  setTimeout(() => {
+    fetchData();
+  }, 500);
 });
 </script>
 
