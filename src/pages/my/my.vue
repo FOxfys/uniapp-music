@@ -19,25 +19,32 @@
         <text class="user-desc" v-if="userStore.isLoggedIn">音乐让生活更美好</text>
         <text class="user-desc" v-else>登录同步你的音乐世界</text>
       </view>
-      <!-- 已移除 login-arrow -->
     </view>
 
     <!-- 功能入口 (网格布局) -->
     <view class="action-grid">
       <view class="action-item" @click="goToHistory">
-        <view class="icon-box history-icon">🕒</view>
+        <view class="icon-box history-icon">
+          <view class="icon i-list"></view>
+        </view>
         <text class="action-text">播放历史</text>
       </view>
       <view class="action-item" @click="showCreateModal">
-        <view class="icon-box create-icon">➕</view>
+        <view class="icon-box create-icon">
+          <text style="font-size: 40rpx;">+</text>
+        </view>
         <text class="action-text">创建歌单</text>
       </view>
       <view class="action-item" @click="goToAbout">
-        <view class="icon-box about-icon">ℹ️</view>
+        <view class="icon-box about-icon">
+          <text style="font-size: 40rpx;">i</text>
+        </view>
         <text class="action-text">关于我们</text>
       </view>
       <view class="action-item" @click="handleLogout" v-if="userStore.isLoggedIn">
-        <view class="icon-box logout-icon">🚪</view>
+        <view class="icon-box logout-icon">
+          <view class="icon i-back" style="transform: rotate(180deg);"></view>
+        </view>
         <text class="action-text">退出登录</text>
       </view>
     </view>
@@ -63,7 +70,6 @@
             <text class="playlist-name">{{ item.name }}</text>
             <text class="playlist-meta">{{ item.song_count || 0 }} 首歌曲</text>
           </view>
-          <!-- 已移除 playlist-arrow -->
         </view>
       </view>
     </view>
@@ -97,8 +103,9 @@
 
 <script setup>
 import { ref } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { onShow, onHide } from '@dcloudio/uni-app';
 import { userStore } from '@/store/user.js';
+import { playerStore } from '@/store/player.js';
 import { createPlaylist, getUserPlaylists, deletePlaylist } from '@/api/playlist.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
@@ -114,6 +121,12 @@ onShow(() => {
   } else {
     myPlaylists.value = [];
   }
+  setTimeout(() => {
+    playerStore.isWidgetVisible = true;
+  }, 50);
+});
+onHide(() => {
+  playerStore.isWidgetVisible = false;
 });
 
 const fetchUserPlaylists = async () => {

@@ -79,3 +79,14 @@ export const getSongCover = (song_id) => {
     method: 'GET'
   });
 };
+
+/**
+ * 获取网易云用户歌单
+ * @param {number} uid - 用户ID
+ */
+export const getUserPlaylistsMusic = (uid) => {
+  return request({
+    url: `/music/userlist/${uid}`,
+    method: 'GET'
+  });
+};

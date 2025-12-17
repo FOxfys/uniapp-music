@@ -17,10 +17,13 @@ export const playerStore = reactive({
   duration: 0,
   playMode: 'sequence',
   
+  // 保持你满意的百分比位置
   widgetPosition: {
-    x: screenWidth - 80,
-    y: screenHeight - 150
+    x: screenWidth - 70,
+    y: screenHeight * 0.5
   },
+  
+  // 移除 isWidgetVisible，回滚到最稳定的状态
 
   togglePlayMode() {
     const modes = ['sequence', 'loop', 'random'];
@@ -36,18 +39,16 @@ export const playerStore = reactive({
 
   async setSongAndPlay(song) {
     if (!song) return;
-    
+
     this.currentTime = 0;
     this.duration = 0;
-    
+
     this.currentSong = song;
     this.isPlaying = false;
-    
-    // 兼容处理
+
     if (!this.currentSong.ar && this.currentSong.artists) this.currentSong.ar = this.currentSong.artists;
     if (!this.currentSong.al && this.currentSong.album) this.currentSong.al = this.currentSong.album;
 
-    // 如果歌曲对象里已经有了播放 URL (来自解析接口)，直接播放
     if (this.currentSong.url) {
         this._playAudio(this.currentSong.url);
         return;
@@ -69,11 +70,13 @@ export const playerStore = reactive({
     }
   },
 
-  // 内部播放方法
   _playAudio(url) {
+    if (url && url.startsWith('http://')) {
+        url = url.replace('http://', 'https://');
+    }
+
     audioManager.src = url;
     audioManager.title = this.currentSong.name || '未知歌曲';
-    // 兼容 ar 数组和 ar_name 字符串
     let singer = '未知歌手';
     if (this.currentSong.ar_name) {
         singer = this.currentSong.ar_name;
@@ -81,16 +84,18 @@ export const playerStore = reactive({
         singer = this.currentSong.ar.map(a => a.name).join('/');
     }
     audioManager.singer = singer;
-    
-    // 兼容 al.picUrl 和 pic
+
     let cover = '';
     if (this.currentSong.pic) {
         cover = this.currentSong.pic;
     } else if (this.currentSong.al) {
         cover = this.currentSong.al.picUrl;
     }
+    if (cover && cover.startsWith('http://')) {
+        cover = cover.replace('http://', 'https://');
+    }
     audioManager.coverImgUrl = cover;
-    
+
     if (userStore.isLoggedIn) {
       savePlayHistory({
         song_id: this.currentSong.id
@@ -160,7 +165,6 @@ export const playerStore = reactive({
   }
 });
 
-// --- 事件监听 ---
 audioManager.onPlay(() => playerStore.isPlaying = true);
 audioManager.onPause(() => playerStore.isPlaying = false);
 audioManager.onStop(() => { 

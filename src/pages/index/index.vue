@@ -4,7 +4,7 @@
     <view class="bg-gradient"></view>
     <view class="bg-noise"></view>
 
-    <!-- 1. 顶部区域：用户状态 + 搜索框 -->
+    <!-- 1. 顶部区域：固定不动 -->
     <view class="top-bar">
       <view class="user-status" @click="handleUserClick">
         <view class="avatar-box">
@@ -25,7 +25,7 @@
       <view class="search-bar" @click="goToSearch">
         <view class="search-input-mock">
           <view class="search-icon-box">
-            <view class="icon-search"></view>
+            <view class="icon i-search"></view>
           </view>
           <text class="placeholder">搜索歌曲、歌手...</text>
           <view class="scan-line"></view>
@@ -33,8 +33,27 @@
       </view>
     </view>
 
-    <scroll-view scroll-y class="scroll-content" @scrolltolower="handleScrollToLower">
-      <!-- 2. 3D 轮播图 -->
+    <!-- 2. 滚动内容区 -->
+    <scroll-view
+      scroll-y
+      class="scroll-content"
+      @scrolltolower="handleScrollToLower"
+      @touchstart="onTouchStart"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
+    >
+      <!-- 下拉刷新动画容器 (通过 transform 移动) -->
+      <view class="refresh-container" :style="{ height: refresherHeight + 'px' }">
+        <view class="refresher-content" :class="{ refreshing: isRefreshing }">
+          <view class="loading-gear">
+            <view class="gear-inner"></view>
+            <view class="gear-outer"></view>
+          </view>
+          <text class="refresher-text">{{ refresherText }}</text>
+        </view>
+      </view>
+
+      <!-- 3D 轮播图 -->
       <swiper
         class="banner-swiper"
         circular
@@ -58,7 +77,7 @@
         </swiper-item>
       </swiper>
 
-      <!-- 3. 推荐歌单 -->
+      <!-- 推荐歌单 -->
       <view class="playlist-section">
         <view class="section-header">
           <text class="section-title">RECOMMEND</text>
@@ -81,7 +100,6 @@
                 lazy-load
                 @error="handleImageError(item, 'playlist')"
               ></image>
-              <view class="play-icon">▶</view>
             </view>
             <text class="playlist-name">{{ item.name }}</text>
           </view>
@@ -101,8 +119,10 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { onShow, onHide } from '@dcloudio/uni-app';
 import { getHotPlaylists } from '@/api/music.js';
 import { userStore } from '@/store/user.js';
+import { playerStore } from '@/store/player.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
 const bannerList = ref([]);
@@ -111,6 +131,22 @@ const page = ref(1);
 const limit = 9;
 const loadingMore = ref(false);
 const currentBannerIndex = ref(0);
+
+// 自定义下拉刷新相关
+const refresherHeight = ref(0);
+const refresherText = ref('下拉刷新');
+const isRefreshing = ref(false);
+let startY = 0;
+let canRefresh = false;
+
+onShow(() => {
+  setTimeout(() => {
+    playerStore.isWidgetVisible = true;
+  }, 50);
+});
+onHide(() => {
+  playerStore.isWidgetVisible = false;
+});
 
 const displayedPlaylist = computed(() => {
   return allPlaylists.value.slice(0, page.value * limit);
@@ -141,7 +177,6 @@ const fetchData = async () => {
   }
 };
 
-// 修复：使用 scroll-view 的事件
 const handleScrollToLower = () => {
   if (loadingMore.value) return;
   if (displayedPlaylist.value.length >= allPlaylists.value.length) return;
@@ -158,7 +193,7 @@ const onBannerChange = (e) => {
 };
 
 const handleImageError = (item, type) => {
-  item.picUrl = '/static/rank/original.png';
+  item.picUrl = '/static/default-avatar.png';
 };
 
 const handleUserClick = () => {
@@ -182,6 +217,47 @@ onMounted(() => {
     fetchData();
   }, 500);
 });
+
+// --- 自定义下拉刷新逻辑 ---
+const onTouchStart = (e) => {
+  if (isRefreshing.value) return;
+  // 只有当滚动条在顶部时才允许下拉
+  // 这里简化处理，假设用户在顶部下拉
+  startY = e.touches[0].clientY;
+  canRefresh = true;
+};
+
+const onTouchMove = (e) => {
+  if (!canRefresh) return;
+  const deltaY = e.touches[0].clientY - startY;
+  if (deltaY > 0) {
+    // 增加阻尼感
+    refresherHeight.value = Math.min(deltaY * 0.5, 150);
+    if (refresherHeight.value > 80) {
+      refresherText.value = '松开刷新';
+    } else {
+      refresherText.value = '下拉刷新';
+    }
+  }
+};
+
+const onTouchEnd = async () => {
+  if (!canRefresh) return;
+  canRefresh = false;
+  if (refresherHeight.value > 80) {
+    isRefreshing.value = true;
+    refresherHeight.value = 80; // 保持在刷新高度
+    refresherText.value = '正在加载...';
+    await fetchData();
+    refresherText.value = '刷新完成';
+    setTimeout(() => {
+      refresherHeight.value = 0;
+      isRefreshing.value = false;
+    }, 500);
+  } else {
+    refresherHeight.value = 0;
+  }
+};
 </script>
 
 <style scoped>
@@ -311,21 +387,8 @@ onMounted(() => {
   margin-right: 15rpx;
 }
 .icon-search {
-  width: 24rpx;
-  height: 24rpx;
-  border: 3rpx solid #00f2ea;
-  border-radius: 50%;
-  position: relative;
-}
-.icon-search::after {
-  content: '';
-  position: absolute;
-  width: 8rpx;
-  height: 3rpx;
-  background-color: #00f2ea;
-  bottom: -4rpx;
-  right: -6rpx;
-  transform: rotate(45deg);
+  font-size: 32rpx;
+  color: #00f2ea;
 }
 .placeholder {
   font-size: 26rpx;
@@ -351,6 +414,61 @@ onMounted(() => {
   height: 0;
   position: relative;
   z-index: 1;
+}
+
+/* 下拉刷新容器 */
+.refresh-container {
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: height 0.1s linear; /* 平滑高度变化 */
+}
+.refresher-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20rpx 0;
+}
+.loading-gear {
+  width: 60rpx;
+  height: 60rpx;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gear-inner, .gear-outer {
+  position: absolute;
+  border-radius: 50%;
+  border: 4rpx solid;
+}
+.gear-inner {
+  width: 30rpx;
+  height: 30rpx;
+  border-color: #00f2ea;
+  animation: rotate 2s linear infinite;
+}
+.gear-outer {
+  width: 60rpx;
+  height: 60rpx;
+  border-color: rgba(0, 242, 234, 0.5);
+  border-style: dashed;
+  animation: rotate-reverse 3s linear infinite;
+}
+.refresher-content.refreshing .gear-inner { animation-duration: 1s; }
+.refresher-content.refreshing .gear-outer { animation-duration: 1.5s; }
+
+@keyframes rotate-reverse {
+  to { transform: rotate(-360deg); }
+}
+
+.refresher-text {
+  font-size: 24rpx;
+  color: #888;
+  margin-top: 10rpx;
+  text-shadow: 0 0 10px rgba(0, 242, 234, 0.3);
 }
 
 /* 3D 轮播图 */
@@ -442,7 +560,7 @@ onMounted(() => {
 .card-image-wrapper {
   position: relative;
   width: 100%;
-  padding-bottom: 100%; /* 1:1 比例 */
+  padding-bottom: 100%;
   border-radius: 20rpx;
   overflow: hidden;
   margin-bottom: 15rpx;

@@ -8,7 +8,7 @@
     <!-- 顶部导航 -->
     <view class="nav-bar">
       <view class="back-btn" @click="goBack">
-        <view class="icon-chevron-down"></view>
+        <view class="icon i-back"></view>
       </view>
       <view class="title-area">
         <text class="song-title">{{ playerStore.currentSong?.name || '未知歌曲' }}</text>
@@ -40,24 +40,30 @@
         <scroll-view
           scroll-y
           class="lyric-scroll"
-          :scroll-into-view="`lyric-line-${lyricIndex}`"
+          :scroll-into-view="`lyric-line-${Math.max(0, lyricIndex - 1)}`"
           scroll-with-animation
           @touchstart="isUserScrolling = true"
           @touchend="resumeAutoScroll"
         >
+          <!-- 顶部不需要大 padding，只需要一点点留白 -->
+          <view style="height: 40rpx;"></view>
+
           <view v-if="lyric.length === 0" class="lyric-line no-lyric">
             {{ debugMsg || '纯音乐，请欣赏' }}
           </view>
           <view
+            v-for="(line, index) in lyric"
+            :key="index"
             :id="`lyric-line-${index}`"
             class="lyric-line"
             :class="{ active: index === lyricIndex }"
-            v-for="(line, index) in lyric"
-            :key="index"
             @click="seekToLyric(line.time)"
           >
             {{ line.text }}
           </view>
+
+          <!-- 底部留白，确保最后一行能滚上来 -->
+          <view style="height: 50vh;"></view>
         </scroll-view>
       </swiper-item>
     </swiper>
@@ -86,29 +92,31 @@
       <view class="controls-grid">
         <!-- 模式切换 -->
         <view class="ctrl-btn mode-btn" @click="playerStore.togglePlayMode()">
-          <view class="icon-mode" :class="playerStore.playMode"></view>
+          <view class="icon i-mode-loop" v-if="playerStore.playMode === 'sequence'"></view>
+          <view class="icon i-mode-one" v-if="playerStore.playMode === 'loop'"></view>
+          <view class="icon i-mode-random" v-if="playerStore.playMode === 'random'"></view>
         </view>
 
         <!-- 上一首 -->
         <view class="ctrl-btn prev-btn" @click="playerStore.playPrev()">
-          <view class="icon-prev"></view>
+          <view class="icon i-prev"></view>
         </view>
 
         <!-- 播放/暂停 (C位) -->
         <view class="play-pause-wrapper" @click="togglePlayPause">
           <view class="play-pause-btn" :class="{ playing: playerStore.isPlaying }">
-            <view class="icon-play-pause" :class="{ paused: !playerStore.isPlaying }"></view>
+            <view class="icon" :class="playerStore.isPlaying ? 'i-pause' : 'i-play'"></view>
           </view>
         </view>
 
         <!-- 下一首 -->
         <view class="ctrl-btn next-btn" @click="playerStore.playNext()">
-          <view class="icon-next"></view>
+          <view class="icon i-next"></view>
         </view>
 
         <!-- 收藏按钮 -->
         <view class="ctrl-btn fav-btn" @click="showAddToPlaylist">
-          <view class="icon-heart"></view>
+          <view class="icon i-heart"></view>
         </view>
       </view>
     </view>
@@ -137,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { onShow, onUnload } from '@dcloudio/uni-app';
 import { playerStore } from '@/store/player.js';
 import { userStore } from '@/store/user.js';
@@ -298,6 +306,7 @@ onShow(() => {
 
     if (lyricIndex.value !== newIndex) {
       lyricIndex.value = newIndex;
+      // 纯 CSS 滚动，不需要手动计算 scrollTop
     }
   });
 });
@@ -369,6 +378,7 @@ const addToPlaylist = async (playlistId) => {
 </script>
 
 <style scoped>
+/* ... (样式部分保持不变) ... */
 .player-container {
   display: flex;
   flex-direction: column;
@@ -521,21 +531,19 @@ const addToPlaylist = async (playlistId) => {
   height: 100%;
   text-align: center;
   scroll-behavior: smooth;
-  padding-top: 300rpx;
-  padding-bottom: 300rpx;
-  box-sizing: border-box;
+  /* 关键：移除大 padding，使用 spacer */
 }
 .lyric-line {
-  min-height: 100rpx;
+  min-height: 100rpx; /* 加大行高 */
   line-height: 1.8;
   padding: 15rpx 40rpx;
   color: #999;
-  font-size: 36rpx;
+  font-size: 36rpx; /* 加大字号 */
   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 .lyric-line.active {
   color: #00f2ea;
-  font-size: 50rpx;
+  font-size: 50rpx; /* 高亮字号 */
   font-weight: bold;
   text-shadow: 0 0 15px rgba(0, 242, 234, 0.5);
   transform: scale(1.05);
@@ -590,6 +598,7 @@ const addToPlaylist = async (playlistId) => {
   background-color: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
   transition: all 0.2s;
+  font-size: 40rpx;
 }
 .ctrl-btn:active {
   background-color: rgba(255,255,255,0.15);
@@ -614,6 +623,8 @@ const addToPlaylist = async (playlistId) => {
   justify-content: center;
   box-shadow: 0 0 20px rgba(0, 242, 234, 0.4);
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  font-size: 50rpx;
+  color: #121212;
 }
 .play-pause-btn:active {
   transform: scale(0.9);
@@ -622,34 +633,8 @@ const addToPlaylist = async (playlistId) => {
 .play-pause-btn.playing {
   box-shadow: 0 0 30px rgba(0, 242, 234, 0.6);
 }
-
-/* --- CSS 图标绘制 --- */
-.icon-chevron-down {
-  width: 24rpx;
-  height: 24rpx;
-  border-left: 4rpx solid #fff;
-  border-bottom: 4rpx solid #fff;
-  transform: rotate(-45deg);
-  margin-top: -10rpx;
-}
-
-.icon-play-pause {
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 20rpx 0 20rpx 36rpx;
-  border-color: transparent transparent transparent #121212;
+.play-pause-btn .icon.i-play {
   margin-left: 8rpx;
-  transition: all 0.2s;
-}
-.play-pause-btn.playing .icon-play-pause {
-  width: 28rpx;
-  height: 36rpx;
-  border-width: 0;
-  border-left: 8rpx solid #121212;
-  border-right: 8rpx solid #121212;
-  background: transparent;
-  margin-left: 0;
 }
 
 .icon-prev {

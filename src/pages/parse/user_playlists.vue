@@ -1,6 +1,6 @@
 <template>
   <view
-    class="history-container"
+    class="user-playlists-container"
     @touchstart="onTouchStart"
     @touchmove="onTouchMove"
     @touchend="onTouchEnd"
@@ -16,63 +16,47 @@
     </view>
 
     <view class="page-wrapper" :style="{ transform: `translateY(${refresherHeight}px)` }">
+      <view class="bg-gradient"></view>
       <view class="bg-noise"></view>
 
-      <view class="nav-bar">
-        <view class="back-btn" @click="goBack">
-          <view class="icon i-back"></view>
-        </view>
-        <text class="nav-title">播放历史</text>
-      </view>
-
       <view class="header">
-        <view class="title-group">
-          <text class="main-title">HISTORY</text>
-          <text class="sub-title">共 {{ songList.length }} 首歌曲</text>
-        </view>
-        <view class="play-all-btn" @click="playAll">
-          <view class="icon i-play"></view>
-          <text>播放全部</text>
-        </view>
+        <text class="title">用户歌单</text>
+        <text class="subtitle" v-if="playlists.length > 0">共 {{ playlists.length }} 个歌单</text>
       </view>
 
-      <scroll-view scroll-y class="song-list" @scroll="onScroll">
-        <view v-if="loading" class="loading-text">加载中...</view>
-        <view v-else-if="songList.length === 0" class="empty-text">暂无播放记录</view>
+      <scroll-view scroll-y class="playlist-scroll" @scroll="onScroll">
+        <view v-if="loading" class="status-text">加载中...</view>
+        <view v-else-if="playlists.length === 0" class="status-text">未找到该用户的公开歌单</view>
 
         <view
-          class="song-card"
-          v-for="(song, index) in songList"
-          :key="song.id"
-          @click="playSong(song)"
+          class="playlist-card"
+          v-for="(item, index) in playlists"
+          :key="item.id"
+          @click="goToPlaylist(item.id)"
           :style="{ animationDelay: index * 0.05 + 's' }"
         >
-          <view class="card-bg"></view>
-          <view class="song-index">{{ String(index + 1).padStart(2, '0') }}</view>
-          <view class="song-info">
-            <text class="song-name">{{ song.name }}</text>
-            <text class="song-detail">
-              {{ song.artist }} - {{ song.album }}
-            </text>
+          <view class="card-border"></view>
+          <image :src="item.coverImgUrl" class="cover" mode="aspectFit" @error="handleImageError(item)"></image>
+          <view class="info">
+            <text class="name">{{ item.name }}</text>
+            <text class="meta">{{ item.trackCount }} 首，播放 {{ formatCount(item.playCount) }}</text>
           </view>
-          <text class="play-time">{{ formatPlayTime(song.play_time) }}</text>
+          <view class="arrow">›</view>
         </view>
       </scroll-view>
     </view>
-
-    <MusicPlayerWidget />
   </view>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import { onShow, onHide } from '@dcloudio/uni-app';
-import { getPlayHistory } from '@/api/playlist.js';
+import { onShow, onHide, onLoad } from '@dcloudio/uni-app';
+import { getUserPlaylistsMusic } from '@/api/music.js';
 import { playerStore } from '@/store/player.js';
-import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
-const songList = ref([]);
+const playlists = ref([]);
 const loading = ref(false);
+let currentUid = null;
 
 // 自定义下拉刷新相关
 const refresherHeight = ref(0);
@@ -83,7 +67,6 @@ let canRefresh = false;
 let currentScrollTop = 0;
 
 onShow(() => {
-  fetchHistory();
   setTimeout(() => {
     playerStore.isWidgetVisible = true;
   }, 50);
@@ -92,61 +75,54 @@ onHide(() => {
   playerStore.isWidgetVisible = false;
 });
 
-const goBack = () => uni.navigateBack();
+onLoad(async (options) => {
+  currentUid = options.uid;
+  if (currentUid) {
+    await fetchPlaylists();
+  }
+});
 
-const fetchHistory = async () => {
+const fetchPlaylists = async () => {
+  if (!currentUid) return;
   loading.value = true;
   try {
-    const res = await getPlayHistory({ page: 1, limit: 100 });
-    if (res.code === 200 && res.history) {
-      songList.value = res.history.map(item => ({
-        id: item.song_id,
-        name: item.name,
-        artist: item.artist,
-        album: item.album,
-        play_time: item.play_time,
-        ar: [{ name: item.artist }],
-        al: { name: item.album, picUrl: item.cover_url || '' },
-      }));
+    const res = await getUserPlaylistsMusic(currentUid);
+    if (res.code === 200 && res.playlist) {
+      playlists.value = res.playlist.map(item => {
+        let cover = item.coverImgUrl || '';
+        if (cover && cover.startsWith('http://')) {
+          cover = cover.replace('http://', 'https://');
+        }
+        if (cover && !cover.includes('?')) {
+            cover += '?param=200y200';
+        }
+        return {
+          ...item,
+          coverImgUrl: cover || '/static/default-avatar.png'
+        };
+      });
     }
   } catch (error) {
     console.error(error);
-    uni.showToast({ title: '获取历史失败', icon: 'none' });
+    uni.showToast({ title: '获取失败', icon: 'none' });
   } finally {
     loading.value = false;
   }
 };
 
-const formatPlayTime = (timeStr) => {
-  if (!timeStr) return '';
-  const compatibleTimeStr = timeStr.replace(/-/g, '/');
-  const date = new Date(compatibleTimeStr);
-  const now = new Date();
-
-  const diff = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diff / (1000 * 60));
-
-  if (diffMinutes < 1) return '刚刚';
-  if (diffMinutes < 60) return `${diffMinutes}分钟前`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}小时前`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}天前`;
-
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+const handleImageError = (item) => {
+  item.coverImgUrl = '/static/default-avatar.png';
 };
 
-const playSong = (song) => {
-  playerStore.setPlaylist(songList.value);
-  playerStore.setSongAndPlay(song);
+const goToPlaylist = (id) => {
+  uni.navigateTo({
+    url: `/pages/playlist/detail?id=${id}&type=music`
+  });
 };
 
-const playAll = () => {
-  if (songList.value.length > 0) {
-    playSong(songList.value[0]);
-  }
+const formatCount = (count) => {
+  if (count > 10000) return (count / 10000).toFixed(1) + '万';
+  return count;
 };
 
 // --- 自定义下拉刷新逻辑 ---
@@ -183,7 +159,7 @@ const onTouchEnd = async () => {
     isRefreshing.value = true;
     refresherHeight.value = 100;
     refresherText.value = '正在加载...';
-    await fetchHistory();
+    await fetchPlaylists();
     refresherText.value = '刷新完成';
     setTimeout(() => {
       refresherHeight.value = 0;
@@ -196,7 +172,7 @@ const onTouchEnd = async () => {
 </script>
 
 <style scoped>
-.history-container {
+.user-playlists-container {
   height: 100vh;
   overflow: hidden;
   position: relative;
@@ -207,7 +183,6 @@ const onTouchEnd = async () => {
   color: #fff;
   display: flex;
   flex-direction: column;
-  padding-bottom: env(safe-area-inset-bottom);
   transition: transform 0.3s ease;
 }
 
@@ -273,6 +248,15 @@ const onTouchEnd = async () => {
 }
 
 /* ... (其他样式保持不变) ... */
+.bg-gradient {
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle at 50% 0%, #1a2a3a, #121212 60%);
+  z-index: 0;
+}
 .bg-noise {
   position: absolute;
   top: 0;
@@ -284,133 +268,100 @@ const onTouchEnd = async () => {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   pointer-events: none;
 }
-.nav-bar {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  padding: 0 30rpx;
-  height: 88rpx;
-  padding-top: env(safe-area-inset-top);
-}
-.back-btn {
-  width: 60rpx;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  font-size: 36rpx;
-}
-.nav-title { font-size: 32rpx; font-weight: bold; margin-left: 20rpx; }
 .header {
   padding: 40rpx 30rpx;
-  flex-shrink: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  padding-top: calc(40rpx + env(safe-area-inset-top));
   position: relative;
   z-index: 1;
 }
-.main-title {
+.title {
   font-size: 60rpx;
   font-weight: 900;
   color: #00f2ea;
   display: block;
-  letter-spacing: 2px;
   text-shadow: 0 0 20px rgba(0, 242, 234, 0.3);
 }
-.sub-title {
-  font-size: 24rpx;
+.subtitle {
+  font-size: 28rpx;
   color: #888;
   margin-top: 10rpx;
-  display: block;
 }
-.play-all-btn {
-  display: flex;
-  align-items: center;
-  background: linear-gradient(135deg, #00f2ea, #00c2b8);
-  padding: 15rpx 30rpx;
-  border-radius: 40rpx;
-  box-shadow: 0 5px 15px rgba(0, 242, 234, 0.3);
-}
-.play-all-btn text {
-  color: #121212;
-  font-weight: bold;
-  font-size: 28rpx;
-}
-.play-icon {
-  color: #121212;
-  font-size: 24rpx;
-  margin-right: 10rpx;
-}
-.song-list {
+.playlist-scroll {
   flex: 1;
   height: 0;
   padding: 0 30rpx;
   position: relative;
   z-index: 1;
+  box-sizing: border-box; /* 修复：确保 padding 不会撑大宽度 */
 }
-.song-card {
+.playlist-card {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 25rpx 30rpx;
-  margin-bottom: 20rpx;
+  padding: 20rpx;
+  margin-bottom: 30rpx;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
   border-radius: 20rpx;
-  overflow: hidden;
-  animation: slideIn 0.5s ease-out forwards;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: slideUp 0.5s ease-out forwards;
   opacity: 0;
   transform: translateY(20px);
+  width: 100%; /* 修复：确保宽度自适应 */
+  box-sizing: border-box;
 }
-.card-bg {
+.playlist-card:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+.card-border {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  z-index: -1;
+  border-radius: 20rpx;
+  border: 1px solid #00f2ea;
+  opacity: 0;
+  transition: opacity 0.3s;
 }
-@keyframes slideIn {
+.playlist-card:hover .card-border {
+  opacity: 0.3;
+}
+@keyframes slideUp {
   to { opacity: 1; transform: translateY(0); }
 }
-.song-index {
-  width: 50rpx;
-  font-size: 32rpx;
-  color: #00f2ea;
-  font-family: monospace;
-  font-weight: bold;
-  opacity: 0.8;
+.cover {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 15rpx;
+  margin-right: 25rpx;
+  flex-shrink: 0;
+  background-color: #222;
 }
-.song-info {
+.info {
   flex: 1;
-  margin-left: 20rpx;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
-.song-name {
+.name {
   font-size: 30rpx;
   color: #fff;
-  margin-bottom: 8rpx;
+  margin-bottom: 10rpx;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: block;
 }
-.song-detail {
-  font-size: 22rpx;
+.meta {
+  font-size: 24rpx;
   color: #888;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
 }
-.play-time {
-  font-size: 22rpx;
-  color: #666;
+.arrow {
+  font-size: 40rpx;
+  color: #444;
   margin-left: 20rpx;
-  font-family: monospace;
 }
-.loading-text, .empty-text {
+.status-text {
   text-align: center;
   margin-top: 100rpx;
   color: #666;

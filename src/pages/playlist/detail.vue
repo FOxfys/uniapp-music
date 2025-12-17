@@ -12,7 +12,7 @@
     <!-- 动态导航栏 -->
     <view class="nav-bar" :style="{ backgroundColor: `rgba(18, 18, 18, ${navOpacity})` }">
       <view class="back-btn" @click="goBack">
-        <view class="icon-back-arrow"></view>
+        <view class="icon i-back"></view>
       </view>
       <text class="nav-title" :style="{ opacity: navTitleOpacity }">{{ playlistInfo.name }}</text>
     </view>
@@ -47,8 +47,8 @@
       <!-- 操作栏 -->
       <view class="action-bar" v-if="pageType === 'music'">
         <view class="action-btn-large" @click="handleCollect">
-          <text class="icon">❤</text>
-          <text class="text">一键转存到我的歌单</text>
+          <view class="icon-heart-cyber"></view>
+          <text class="text">一键转存</text>
         </view>
       </view>
       <view class="action-bar-placeholder" v-else></view>
@@ -57,7 +57,7 @@
       <view class="song-list-container">
         <view class="play-all-header">
           <view class="play-all-btn" @click="playAll">
-            <text class="play-icon">▶</text>
+            <view class="icon i-play"></view>
             <text class="play-text">播放全部</text>
             <text class="count-text">({{ songList.length }})</text>
           </view>
@@ -85,13 +85,12 @@
     <!-- 导入进度弹窗 (炫酷版) -->
     <view class="modal-mask" v-if="isImporting">
       <view class="progress-modal">
-        <text class="progress-title">正在转存...</text>
+        <text class="progress-title" :class="{ 'success-text': importProgress >= 100 }">{{ importStatus }}</text>
         <view class="progress-bar-bg">
           <view class="progress-bar-fill" :style="{ width: importProgress + '%' }">
             <view class="progress-glow"></view>
           </view>
         </view>
-        <text class="progress-info">{{ importStatus }}</text>
         <text class="progress-percent">{{ Math.floor(importProgress) }}%</text>
       </view>
     </view>
@@ -117,19 +116,19 @@
 
 <script setup>
 import { ref } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { onShow, onHide, onLoad } from '@dcloudio/uni-app';
 import { getPlaylistDetail as getMusicPlaylist } from '@/api/music.js';
 import { getUserPlaylistDetail, createPlaylist, addSongToPlaylist, updatePlaylist, removeSongFromPlaylist } from '../../api/playlist.js';
 import { playerStore } from '@/store/player.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
+const loading = ref(true);
 const playlistInfo = ref({});
 const songList = ref([]);
 const pageType = ref('music');
 const currentPlaylistId = ref(null);
 const showDescModal = ref(false);
 
-// 动效相关
 const navOpacity = ref(0);
 const navTitleOpacity = ref(0);
 const headerScale = ref(1);
@@ -140,38 +139,51 @@ const isImporting = ref(false);
 const importProgress = ref(0);
 const importStatus = ref('');
 
+onShow(() => {
+  setTimeout(() => {
+    playerStore.isWidgetVisible = true;
+  }, 50);
+});
+onHide(() => {
+  playerStore.isWidgetVisible = false;
+});
+
 onLoad(async (options) => {
   const id = options.id;
+  if (!id) {
+    uni.showToast({ title: '缺少歌单ID', icon: 'none' });
+    loading.value = false;
+    return;
+  }
+
   currentPlaylistId.value = id;
   pageType.value = options.type || 'music';
 
-  if (id) {
-    uni.showLoading({ title: '加载中...' });
-    try {
-      let res;
-      if (pageType.value === 'user') {
-        res = await getUserPlaylistDetail(id);
-        if (res.code === 200 && res.playlist) {
-          playlistInfo.value = {
-            name: res.playlist.name,
-            description: res.playlist.description,
-            coverImgUrl: res.playlist.cover_url || '/static/rank/original.png',
-            creator: { nickname: '我' }
-          };
-          songList.value = (res.songs || []).map(normalizeSong);
-        }
-      } else {
-        res = await getMusicPlaylist(id);
-        if (res.code === 200 && res.result) {
-          playlistInfo.value = res.result;
-          songList.value = (res.result.tracks || []).map(normalizeSong);
-        }
+  try {
+    let res;
+    if (pageType.value === 'user') {
+      res = await getUserPlaylistDetail(id);
+      if (res.code === 200 && res.playlist) {
+        playlistInfo.value = {
+          name: res.playlist.name,
+          description: res.playlist.description,
+          coverImgUrl: res.playlist.cover_url || '/static/default-avatar.png',
+          creator: { nickname: '我' }
+        };
+        songList.value = (res.songs || []).map(normalizeSong);
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      uni.hideLoading();
+    } else {
+      res = await getMusicPlaylist(id);
+      if (res.code === 200 && res.result) {
+        playlistInfo.value = res.result;
+        songList.value = (res.result.tracks || []).map(normalizeSong);
+      }
     }
+  } catch (error) {
+    console.error("Failed to fetch playlist detail:", error);
+    uni.showToast({ title: '加载失败，请重试', icon: 'none' });
+  } finally {
+    loading.value = false;
   }
 });
 
@@ -351,7 +363,28 @@ const formatCount = (count) => {
   background-color: #121212;
 }
 
-/* 背景 */
+.loading-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20rpx;
+}
+.loading-dot {
+  width: 20rpx;
+  height: 20rpx;
+  background-color: #00f2ea;
+  border-radius: 50%;
+  animation: bounce 0.8s infinite alternate;
+}
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  to { transform: translateY(-20rpx); opacity: 0.5; }
+}
+
+/* ... (其他样式保持不变) ... */
 .bg-image {
   position: absolute;
   top: 0;
@@ -362,6 +395,7 @@ const formatCount = (count) => {
   filter: blur(40px);
   opacity: 0.6;
   transition: transform 0.1s linear;
+  will-change: transform;
 }
 .bg-mask {
   position: absolute;
@@ -373,7 +407,6 @@ const formatCount = (count) => {
   z-index: 2;
 }
 
-/* 动态导航栏 */
 .nav-bar {
   position: fixed;
   top: 0;
@@ -383,22 +416,17 @@ const formatCount = (count) => {
   display: flex;
   align-items: center;
   padding: 0 30rpx;
-  height: 88rpx;
-  padding-top: env(safe-area-inset-top);
+  height: 120rpx;
+  padding-top: calc(40rpx + env(safe-area-inset-top));
   transition: background-color 0.3s;
+  will-change: background-color;
 }
 .back-btn {
-  width: 60rpx;
-  height: 60rpx;
+  width: 80rpx;
+  height: 80rpx;
   display: flex;
   align-items: center;
-}
-.icon-back-arrow {
-  width: 24rpx;
-  height: 24rpx;
-  border-left: 4rpx solid #fff;
-  border-bottom: 4rpx solid #fff;
-  transform: rotate(45deg);
+  font-size: 40rpx;
 }
 .nav-title {
   position: absolute;
@@ -407,21 +435,22 @@ const formatCount = (count) => {
   font-size: 32rpx;
   font-weight: bold;
   transition: opacity 0.3s;
+  will-change: opacity;
 }
 
-/* 滚动内容 */
 .scroll-content {
   flex: 1;
   height: 0;
   position: relative;
   z-index: 10;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* 头部信息 */
 .header-wrapper {
-  padding-top: calc(88rpx + env(safe-area-inset-top));
+  padding-top: calc(120rpx + env(safe-area-inset-top));
   transition: transform 0.2s, opacity 0.2s;
   transform-origin: top center;
+  will-change: transform, opacity;
 }
 .header-section {
   display: flex;
@@ -500,7 +529,6 @@ const formatCount = (count) => {
   flex: 1;
 }
 
-/* 操作栏 */
 .action-bar {
   padding: 0 40rpx 40rpx;
   display: flex;
@@ -516,11 +544,27 @@ const formatCount = (count) => {
   justify-content: center;
   box-shadow: 0 5px 15px rgba(0, 242, 234, 0.3);
 }
-.action-btn-large .icon {
-  font-size: 32rpx;
-  color: #121212;
+.action-btn-large .icon-heart-cyber {
+  width: 24rpx;
+  height: 24rpx;
+  background-color: #121212;
+  transform: rotate(45deg);
+  position: relative;
   margin-right: 15rpx;
+  margin-bottom: 6rpx;
 }
+.action-btn-large .icon-heart-cyber::before,
+.action-btn-large .icon-heart-cyber::after {
+  content: '';
+  width: 24rpx;
+  height: 24rpx;
+  background-color: #121212;
+  border-radius: 50%;
+  position: absolute;
+}
+.action-btn-large .icon-heart-cyber::before { left: -12rpx; }
+.action-btn-large .icon-heart-cyber::after { top: -12rpx; }
+
 .action-btn-large .text {
   font-size: 30rpx;
   color: #121212;
@@ -530,7 +574,6 @@ const formatCount = (count) => {
   height: 40rpx;
 }
 
-/* 歌曲列表容器 */
 .song-list-container {
   background-color: #121212;
   border-top-left-radius: 40rpx;
@@ -539,23 +582,21 @@ const formatCount = (count) => {
   padding-bottom: 120rpx;
 }
 
-/* 播放全部栏 */
 .play-all-header {
   padding: 30rpx;
   position: sticky;
-  top: calc(88rpx + env(safe-area-inset-top)); /* 粘性定位，吸附在导航栏下方 */
+  top: calc(120rpx + env(safe-area-inset-top));
   background-color: #121212;
   z-index: 20;
   border-top-left-radius: 40rpx;
   border-top-right-radius: 40rpx;
 }
 .play-all-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   background-color: #2a2a2a;
   padding: 20rpx 30rpx;
   border-radius: 50rpx;
-  width: fit-content;
   box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 .play-all-btn:active {
@@ -577,7 +618,6 @@ const formatCount = (count) => {
   margin-left: 10rpx;
 }
 
-/* 列表项 */
 .song-item {
   display: flex;
   align-items: center;
@@ -634,7 +674,6 @@ const formatCount = (count) => {
   font-size: 36rpx;
 }
 
-/* 弹窗样式 */
 .modal-mask {
   position: fixed;
   top: 0;
@@ -649,7 +688,6 @@ const formatCount = (count) => {
   backdrop-filter: blur(5px);
 }
 
-/* 进度弹窗 */
 .progress-modal {
   width: 70%;
   background-color: #2a2a2a;
@@ -666,6 +704,11 @@ const formatCount = (count) => {
   font-weight: bold;
   color: #fff;
   margin-bottom: 40rpx;
+  transition: color 0.3s;
+}
+.progress-title.success-text {
+  color: #00f2ea;
+  animation: text-shine 1s;
 }
 .progress-bar-bg {
   width: 100%;
@@ -692,11 +735,6 @@ const formatCount = (count) => {
   box-shadow: 0 0 10px #fff;
   opacity: 0.8;
 }
-.progress-info {
-  font-size: 26rpx;
-  color: #aaa;
-  margin-bottom: 10rpx;
-}
 .progress-percent {
   font-size: 48rpx;
   font-weight: bold;
@@ -704,7 +742,11 @@ const formatCount = (count) => {
   font-family: monospace;
 }
 
-/* 简介详情弹窗 */
+@keyframes text-shine {
+  0%, 100% { text-shadow: 0 0 10px rgba(0, 242, 234, 0.5); }
+  50% { text-shadow: 0 0 30px rgba(0, 242, 234, 1); }
+}
+
 .desc-modal-mask {
   position: fixed;
   top: 0;

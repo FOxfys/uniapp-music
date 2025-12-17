@@ -29,15 +29,17 @@ const position = reactive({
   y: playerStore.widgetPosition.y
 });
 
-// 修复：使用计算属性获取封面，与播放页逻辑保持一致
+// 保持这个健壮的封面获取逻辑
 const coverUrl = computed(() => {
   const song = playerStore.currentSong;
   if (!song) return '/static/default-avatar.png';
 
-  // 优先使用 al.picUrl (网易云原生结构)
-  // 其次使用 cover_url (后端返回的扁平化结构)
-  // 最后使用 picUrl (备用字段)
-  return song.al?.picUrl || song.cover_url || song.picUrl || '/static/default-avatar.png';
+  let url = song.al?.picUrl || song.picUrl || song.cover_url || song.pic || '/static/default-avatar.png';
+
+  if (url && url.startsWith('http://')) {
+    url = url.replace('http://', 'https://');
+  }
+  return url;
 });
 
 const touchStart = reactive({ x: 0, y: 0 });

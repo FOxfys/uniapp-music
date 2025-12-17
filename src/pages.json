@@ -3,13 +3,14 @@
 		{
 			"path": "pages/index/index",
 			"style": {
-				"navigationBarTitleText": "首页"
+				"navigationBarTitleText": "首页",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
 			"path": "pages/rank/rank",
 			"style": {
-					"navigationBarTitleText": "排行榜"
+				"navigationBarTitleText": "排行榜"
 			}
 		},
 		{
@@ -21,7 +22,8 @@
 		{
 			"path": "pages/my/my",
 			"style": {
-				"navigationBarTitleText": "我的"
+				"navigationBarTitleText": "我的",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
@@ -61,7 +63,15 @@
 			"path": "pages/my/history",
 			"style": {
 				"navigationBarTitleText": "播放历史",
-				"navigationStyle": "custom"
+				"navigationStyle": "custom",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/parse/user_playlists",
+			"style": {
+				"navigationBarTitleText": "用户歌单",
+				"enablePullDownRefresh": false
 			}
 		}
 	],
@@ -71,7 +81,8 @@
 		"navigationBarBackgroundColor": "#121212",
 		"backgroundColor": "#121212",
 		"backgroundColorTop": "#121212",
-		"backgroundColorBottom": "#121212"
+		"backgroundColorBottom": "#121212",
+		"enablePullDownRefresh": false
 	},
 	"tabBar": {
 		"color": "#8a8a8a",
@@ -82,7 +93,7 @@
 			{
 				"pagePath": "pages/index/index",
 				"text": "首页",
-				"iconPath": "static/tabbar/hom.png",
+				"iconPath": "static/tabbar/home.png",
 				"selectedIconPath": "static/tabbar/home-active.png"
 			},
 			{

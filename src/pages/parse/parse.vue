@@ -16,7 +16,7 @@
         <view class="core-glow"></view>
         <textarea
           class="parse-textarea"
-          placeholder="粘贴链接或输入ID..."
+          :placeholder="placeholderText"
           v-model="inputValue"
           maxlength="-1"
         />
@@ -42,6 +42,13 @@
         >
           <text>歌单</text>
         </view>
+        <view
+          class="type-item"
+          :class="{ active: parseType === 'user' }"
+          @click="parseType = 'user'"
+        >
+          <text>用户</text>
+        </view>
       </view>
 
       <!-- 解析按钮 -->
@@ -57,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { playerStore } from '@/store/player.js';
 import { parseMusic } from '@/api/music.js';
@@ -72,6 +79,13 @@ onShow(() => {
 const inputValue = ref('');
 const parseType = ref('playlist');
 
+const placeholderText = computed(() => {
+  if (parseType.value === 'song') return '粘贴歌曲链接或输入ID...';
+  if (parseType.value === 'playlist') return '粘贴歌单链接或输入ID...';
+  if (parseType.value === 'user') return '粘贴用户主页链接或输入ID...';
+  return '粘贴内容...';
+});
+
 const handlePaste = () => {
   uni.getClipboardData({
     success: (res) => {
@@ -80,6 +94,8 @@ const handlePaste = () => {
         parseType.value = 'playlist';
       } else if (res.data.includes('song')) {
         parseType.value = 'song';
+      } else if (res.data.includes('user')) {
+        parseType.value = 'user';
       }
       uni.showToast({ title: '已粘贴', icon: 'none' });
     }
@@ -87,14 +103,17 @@ const handlePaste = () => {
 };
 
 const extractId = (str) => {
-  const match = str.match(/id=(\d+)/);
-  if (match) return match[1];
+  const matchId = str.match(/id=(\d+)/);
+  if (matchId) return matchId[1];
 
-  const match2 = str.match(/\/playlist\/(\d+)/);
-  if (match2) return match2[1];
+  const matchPlaylist = str.match(/\/playlist\/(\d+)/);
+  if (matchPlaylist) return matchPlaylist[1];
 
-  const match3 = str.match(/\/song\/(\d+)/);
-  if (match3) return match3[1];
+  const matchSong = str.match(/\/song\/(\d+)/);
+  if (matchSong) return matchSong[1];
+
+  const matchUser = str.match(/\/user\/home\?id=(\d+)/);
+  if (matchUser) return matchUser[1];
 
   if (/^\d+$/.test(str)) return str;
 
@@ -118,20 +137,22 @@ const handleParse = async () => {
     uni.navigateTo({
       url: `/pages/playlist/detail?id=${id}&type=music`
     });
+  } else if (parseType.value === 'user') {
+    uni.navigateTo({
+      url: `/pages/parse/user_playlists?uid=${id}`
+    });
   } else {
     uni.showLoading({ title: '解析中...' });
     try {
       const res = await parseMusic({ ids: id, level: 'standard', type: 'json' });
 
       if (res.status === 200) {
-        // 构造符合 playerStore 格式的歌曲对象
         const song = {
           id: id,
           name: res.name,
-          url: res.url, // 直接传入 URL
+          url: res.url,
           ar: [{ name: res.ar_name }],
           al: { name: res.al_name, picUrl: res.pic },
-          // 兼容旧字段
           picUrl: res.pic,
           artist: res.ar_name,
           album: res.al_name
@@ -274,7 +295,7 @@ const handleParse = async () => {
   border: 1px solid rgba(255,255,255,0.1);
 }
 .type-item {
-  padding: 15rpx 60rpx;
+  padding: 15rpx 40rpx;
   border-radius: 40rpx;
   font-size: 30rpx;
   color: #888;
