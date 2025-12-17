@@ -48,11 +48,11 @@
           <!-- 顶部不需要大 padding，只需要一点点留白 -->
           <view style="height: 40rpx;"></view>
 
-          <view v-if="lyric.length === 0" class="lyric-line no-lyric">
-            {{ debugMsg || '纯音乐，请欣赏' }}
+          <view v-if="playerStore.lyric.length === 0" class="lyric-line no-lyric">
+            {{ '纯音乐，请欣赏' }}
           </view>
           <view
-            v-for="(line, index) in lyric"
+            v-for="(line, index) in playerStore.lyric"
             :key="index"
             :id="`lyric-line-${index}`"
             class="lyric-line"
@@ -149,43 +149,26 @@ import { ref, watch, computed } from 'vue';
 import { onShow, onUnload } from '@dcloudio/uni-app';
 import { playerStore } from '@/store/player.js';
 import { userStore } from '@/store/user.js';
-import { getLyric, getSongCover } from '@/api/music.js';
 import { getUserPlaylists, addSongToPlaylist } from '@/api/playlist.js';
 
 const swiperIndex = ref(0);
-const lyric = ref([]);
 const lyricIndex = ref(0);
-const debugMsg = ref('');
 let isSeeking = false;
-const coverUrl = ref('/static/default-avatar.png');
 
 const isFavModalVisible = ref(false);
 const myPlaylists = ref([]);
 const isUserScrolling = ref(false);
 let userScrollTimer = null;
 
-const fetchCover = async (song) => {
-  if (!song || !song.id) return;
-
-  const existingCover = song.al?.picUrl || song.cover_url;
-  if (existingCover) {
-    coverUrl.value = existingCover;
-    return;
+const coverUrl = computed(() => {
+  const song = playerStore.currentSong;
+  if (!song) return '/static/default-avatar.png';
+  let url = song.al?.picUrl || song.picUrl || song.cover_url || song.pic || '/static/default-avatar.png';
+  if (url && url.startsWith('http://')) {
+    url = url.replace('http://', 'https://');
   }
-
-  try {
-    const res = await getSongCover(song.id);
-    if (res.data && res.data.picUrl) {
-      coverUrl.value = res.data.picUrl;
-      if (playerStore.currentSong && playerStore.currentSong.id === song.id) {
-        if (!playerStore.currentSong.al) playerStore.currentSong.al = {};
-        playerStore.currentSong.al.picUrl = res.data.picUrl;
-      }
-    }
-  } catch (error) {
-    console.error('Fetch cover failed:', error);
-  }
-};
+  return url;
+});
 
 const getArtistName = (song) => {
   if (!song) return '';
@@ -193,57 +176,6 @@ const getArtistName = (song) => {
   if (song.artists) return song.artists.map(a => a.name).join('/');
   if (song.artist) return song.artist;
   return '未知歌手';
-};
-
-const fetchLyric = async (id) => {
-  if (!id) return;
-  lyric.value = [];
-  debugMsg.value = '';
-
-  try {
-    const res = await getLyric(id);
-    let lrcText = '';
-    if (res?.data?.lrc) lrcText = res.data.lrc;
-    else if (res?.lrc) lrcText = res.lrc;
-    else if (res?.lrc?.lyric) lrcText = res.lrc.lyric;
-    else if (res?.data?.lrc?.lyric) lrcText = res.data.lrc.lyric;
-
-    if (typeof lrcText !== 'string') {
-        lrcText = JSON.stringify(lrcText);
-        if (lrcText === '{}' || lrcText === 'null') lrcText = '';
-    }
-
-    if (lrcText) {
-      lyric.value = parseLyric(lrcText);
-    } else {
-      debugMsg.value = '暂无歌词';
-    }
-  } catch (error) {
-    console.error("Failed to fetch lyric:", error);
-    debugMsg.value = '歌词加载失败';
-  }
-};
-
-const parseLyric = (lrcText) => {
-  if (!lrcText) return [];
-  const lines = lrcText.split(/[\n\r]+/);
-  const result = [];
-  const timeReg = /\[(\d{1,2}):(\d{1,2})(\.(\d{1,3}))?\](.*)/;
-
-  for (const line of lines) {
-    const match = line.match(timeReg);
-    if (match) {
-      const min = parseInt(match[1]);
-      const sec = parseInt(match[2]);
-      const ms = match[4] ? parseFloat("0." + match[4]) : 0;
-      const time = min * 60 + sec + ms;
-      const text = match[5].trim();
-      if (text) {
-        result.push({ time, text });
-      }
-    }
-  }
-  return result;
 };
 
 const progress = computed(() => {
@@ -285,41 +217,30 @@ const resumeAutoScroll = () => {
 
 let stopWatch = null;
 onShow(() => {
-  const song = playerStore.currentSong;
-  fetchLyric(song?.id);
-  fetchCover(song);
-
+  // Watch for time updates to sync lyric
   stopWatch = watch(() => playerStore.currentTime, (newTime) => {
-    if (isSeeking || lyric.value.length === 0 || isUserScrolling.value) return;
+    if (isSeeking || playerStore.lyric.length === 0 || isUserScrolling.value) return;
 
     let newIndex = -1;
-    for (let i = 0; i < lyric.value.length; i++) {
-        if (lyric.value[i].time > newTime) {
+    for (let i = 0; i < playerStore.lyric.length; i++) {
+        if (playerStore.lyric[i].time > newTime) {
             newIndex = i - 1;
             break;
         }
     }
-    if (newIndex === -1 && lyric.value.length > 0 && newTime > lyric.value[lyric.value.length-1].time) {
-        newIndex = lyric.value.length - 1;
+    if (newIndex === -1 && playerStore.lyric.length > 0 && newTime > playerStore.lyric[playerStore.lyric.length-1].time) {
+        newIndex = playerStore.lyric.length - 1;
     }
     if (newIndex < 0) newIndex = 0;
 
     if (lyricIndex.value !== newIndex) {
       lyricIndex.value = newIndex;
-      // 纯 CSS 滚动，不需要手动计算 scrollTop
     }
   });
 });
 
 onUnload(() => {
   if (stopWatch) stopWatch();
-});
-
-watch(() => playerStore.currentSong?.id, (newId, oldId) => {
-  if (newId && newId !== oldId) {
-    fetchLyric(newId);
-    fetchCover(playerStore.currentSong);
-  }
 });
 
 const togglePlayPause = () => {

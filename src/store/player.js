@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { getSongUrl } from '../api/music.js';
+import { getSongUrl, getSongCover, getLyric } from '../api/music.js';
 import { savePlayHistory } from '../api/playlist.js';
 import { userStore } from './user.js';
 
@@ -9,21 +9,41 @@ const sysInfo = uni.getSystemInfoSync();
 const screenWidth = sysInfo.windowWidth;
 const screenHeight = sysInfo.windowHeight;
 
+const parseLyric = (lrcText) => {
+  if (!lrcText) return [];
+  const lines = lrcText.split(/[\n\r]+/);
+  const result = [];
+  const timeReg = /\[(\d{1,2}):(\d{1,2})(\.(\d{1,3}))?\](.*)/;
+
+  for (const line of lines) {
+    const match = line.match(timeReg);
+    if (match) {
+      const min = parseInt(match[1]);
+      const sec = parseInt(match[2]);
+      const ms = match[4] ? parseFloat("0." + match[4]) : 0;
+      const time = min * 60 + sec + ms;
+      const text = match[5].trim();
+      if (text) {
+        result.push({ time, text });
+      }
+    }
+  }
+  return result;
+};
+
 export const playerStore = reactive({
   isPlaying: false,
   currentSong: null,
   playlist: [],
+  lyric: [],
   currentTime: 0,
   duration: 0,
   playMode: 'sequence',
   
-  // 保持你满意的百分比位置
   widgetPosition: {
     x: screenWidth - 70,
     y: screenHeight * 0.5
   },
-  
-  // 移除 isWidgetVisible，回滚到最稳定的状态
 
   togglePlayMode() {
     const modes = ['sequence', 'loop', 'random'];
@@ -42,6 +62,7 @@ export const playerStore = reactive({
 
     this.currentTime = 0;
     this.duration = 0;
+    this.lyric = [];
 
     this.currentSong = song;
     this.isPlaying = false;
@@ -49,24 +70,55 @@ export const playerStore = reactive({
     if (!this.currentSong.ar && this.currentSong.artists) this.currentSong.ar = this.currentSong.artists;
     if (!this.currentSong.al && this.currentSong.album) this.currentSong.al = this.currentSong.album;
 
-    if (this.currentSong.url) {
+    // --- 1. Fetch Audio URL and play ---
+    const playAudio = async () => {
+      if (this.currentSong.url) {
         this._playAudio(this.currentSong.url);
         return;
-    }
-
-    uni.showLoading({ title: '加载音频...' });
-    try {
-      const res = await getSongUrl(this.currentSong.id);
-      if (res.data && res.data.url) {
-        this._playAudio(res.data.url);
-      } else {
-        uni.showToast({ title: '无法获取播放地址', icon: 'none' });
       }
-    } catch (error) {
-      console.error(error);
-      uni.showToast({ title: '播放出错', icon: 'none' });
-    } finally {
-      uni.hideLoading();
+      uni.showLoading({ title: '加载音频...' });
+      try {
+        const res = await getSongUrl(this.currentSong.id);
+        if (res.data && res.data.url) {
+          this._playAudio(res.data.url);
+        } else {
+          uni.showToast({ title: '无法获取播放地址', icon: 'none' });
+        }
+      } catch (error) {
+        console.error(error);
+        uni.showToast({ title: '播放出错', icon: 'none' });
+      } finally {
+        uni.hideLoading();
+      }
+    };
+    playAudio();
+
+    // --- 2. Fetch Lyrics ---
+    getLyric(song.id).then(res => {
+      let lrcText = '';
+      if (res?.data?.lrc?.lyric) lrcText = res.data.lrc.lyric;
+      else if (res?.lrc?.lyric) lrcText = res.lrc.lyric;
+      else if (res?.data?.lrc) lrcText = res.data.lrc;
+      else if (res?.lrc) lrcText = res.lrc;
+
+      if (typeof lrcText === 'string' && lrcText) {
+        this.lyric = parseLyric(lrcText);
+      }
+    }).catch(err => {
+      console.error("Failed to fetch lyric:", err);
+    });
+
+    // --- 3. Fetch Cover if needed ---
+    const hasCover = this.currentSong.al?.picUrl || this.currentSong.picUrl || this.currentSong.cover_url || this.currentSong.pic;
+    if (!hasCover) {
+      getSongCover(song.id).then(res => {
+        if (res.data && res.data.picUrl) {
+          if (!this.currentSong.al) this.currentSong.al = {};
+          this.currentSong.al.picUrl = res.data.picUrl;
+        }
+      }).catch(err => {
+        console.error('Failed to fetch cover:', err);
+      });
     }
   },
 
@@ -85,12 +137,7 @@ export const playerStore = reactive({
     }
     audioManager.singer = singer;
 
-    let cover = '';
-    if (this.currentSong.pic) {
-        cover = this.currentSong.pic;
-    } else if (this.currentSong.al) {
-        cover = this.currentSong.al.picUrl;
-    }
+    let cover = this.currentSong.al?.picUrl || this.currentSong.picUrl || this.currentSong.cover_url || this.currentSong.pic || '';
     if (cover && cover.startsWith('http://')) {
         cover = cover.replace('http://', 'https://');
     }
