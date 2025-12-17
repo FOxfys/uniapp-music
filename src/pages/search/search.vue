@@ -6,7 +6,7 @@
     <!-- 顶部搜索栏 -->
     <view class="search-header">
       <view class="input-wrapper">
-        <text class="search-icon">🔍</text>
+        <view class="icon i-search"></view>
         <input
           class="search-input"
           type="text"
@@ -85,7 +85,6 @@
               {{ song.artists.map(a => a.name).join('/') }} - {{ song.album.name }}
             </text>
           </view>
-          <view class="action-icon">▶</view>
         </view>
       </scroll-view>
     </block>
@@ -269,7 +268,7 @@ const deleteHistoryItem = (index) => {
   opacity: 1;
 }
 
-.search-icon {
+.icon.i-search {
   color: #00f2ea;
   margin-right: 20rpx;
   font-size: 36rpx;
@@ -413,6 +412,7 @@ const deleteHistoryItem = (index) => {
   padding: 20rpx;
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
 }
 .song-item {
   display: flex;
@@ -425,6 +425,7 @@ const deleteHistoryItem = (index) => {
   animation: slideUp 0.5s ease-out forwards;
   opacity: 0;
   transform: translateY(20px);
+  box-sizing: border-box;
 }
 @keyframes slideUp {
   to { opacity: 1; transform: translateY(0); }
@@ -439,6 +440,7 @@ const deleteHistoryItem = (index) => {
   font-size: 32rpx;
   font-family: monospace;
   font-weight: bold;
+  flex-shrink: 0; /* 防止序号被压缩 */
 }
 .song-info {
   flex: 1;
@@ -446,8 +448,11 @@ const deleteHistoryItem = (index) => {
   flex-direction: column;
   margin-left: 20rpx;
   overflow: hidden;
+  min-width: 0; /* 关键：允许 flex item 缩小到内容以下 */
+  margin-right: 10rpx;
 }
 .song-name {
+  display: block;
   font-size: 32rpx;
   color: #fff;
   margin-bottom: 8rpx;
@@ -456,15 +461,11 @@ const deleteHistoryItem = (index) => {
   text-overflow: ellipsis;
 }
 .song-detail {
+  display: block;
   font-size: 24rpx;
   color: rgba(255, 255, 255, 0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.action-icon {
-  padding: 0 20rpx;
-  color: #00f2ea;
-  font-size: 36rpx;
 }
 </style>
