@@ -28,7 +28,7 @@
       <view class="header">
         <view class="title-group">
           <text class="main-title">HISTORY</text>
-          <text class="sub-title">共 {{ songList.length }} 首歌曲</text>
+          <text class="sub-title">共 {{ totalSongs }} 首歌曲</text>
         </view>
         <view class="play-all-btn" @click="playAll">
           <view class="icon i-play"></view>
@@ -48,7 +48,7 @@
           :style="{ animationDelay: index * 0.05 + 's' }"
         >
           <view class="card-bg"></view>
-          <view class="song-index">{{ String(index + 1).padStart(2, '0') }}</view>
+          <view class="song-index">{{ String((currentPage - 1) * limit + index + 1).padStart(2, '0') }}</view>
           <view class="song-info">
             <text class="song-name">{{ song.name }}</text>
             <text class="song-detail">
@@ -58,6 +58,17 @@
           <text class="play-time">{{ formatPlayTime(song.play_time) }}</text>
         </view>
       </scroll-view>
+
+      <!-- 分页控制器 -->
+      <view class="pagination-controls" v-if="totalPages > 1">
+        <view class="page-btn" :class="{ disabled: currentPage === 1 }" @click="changePage(currentPage - 1)">
+          <view class="icon i-prev"></view>
+        </view>
+        <text class="page-info">{{ currentPage }} / {{ totalPages }}</text>
+        <view class="page-btn" :class="{ disabled: currentPage === totalPages }" @click="changePage(currentPage + 1)">
+          <view class="icon i-next"></view>
+        </view>
+      </view>
     </view>
 
     <MusicPlayerWidget />
@@ -73,6 +84,10 @@ import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
 
 const songList = ref([]);
 const loading = ref(false);
+const currentPage = ref(1);
+const totalPages = ref(1);
+const totalSongs = ref(0);
+const limit = 100; // 每页数量
 
 // 自定义下拉刷新相关
 const refresherHeight = ref(0);
@@ -83,7 +98,7 @@ let canRefresh = false;
 let currentScrollTop = 0;
 
 onShow(() => {
-  fetchHistory();
+  fetchHistory(1);
   setTimeout(() => {
     playerStore.isWidgetVisible = true;
   }, 50);
@@ -94,10 +109,10 @@ onHide(() => {
 
 const goBack = () => uni.navigateBack();
 
-const fetchHistory = async () => {
+const fetchHistory = async (page) => {
   loading.value = true;
   try {
-    const res = await getPlayHistory({ page: 1, limit: 100 });
+    const res = await getPlayHistory({ page: page, limit: limit });
     if (res.code === 200 && res.history) {
       songList.value = res.history.map(item => ({
         id: item.song_id,
@@ -108,6 +123,9 @@ const fetchHistory = async () => {
         ar: [{ name: item.artist }],
         al: { name: item.album, picUrl: item.cover_url || '' },
       }));
+      currentPage.value = res.page;
+      totalPages.value = res.total_pages;
+      totalSongs.value = res.total;
     }
   } catch (error) {
     console.error(error);
@@ -115,6 +133,13 @@ const fetchHistory = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const changePage = (page) => {
+  if (page < 1 || page > totalPages.value || page === currentPage.value) {
+    return;
+  }
+  fetchHistory(page);
 };
 
 const formatPlayTime = (timeStr) => {
@@ -183,7 +208,7 @@ const onTouchEnd = async () => {
     isRefreshing.value = true;
     refresherHeight.value = 100;
     refresherText.value = '正在加载...';
-    await fetchHistory();
+    await fetchHistory(1); // 刷新总是回到第一页
     refresherText.value = '刷新完成';
     setTimeout(() => {
       refresherHeight.value = 0;
@@ -348,6 +373,7 @@ const onTouchEnd = async () => {
   padding: 0 30rpx;
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
 }
 .song-card {
   position: relative;
@@ -360,6 +386,7 @@ const onTouchEnd = async () => {
   animation: slideIn 0.5s ease-out forwards;
   opacity: 0;
   transform: translateY(20px);
+  box-sizing: border-box;
 }
 .card-bg {
   position: absolute;
@@ -381,11 +408,14 @@ const onTouchEnd = async () => {
   font-family: monospace;
   font-weight: bold;
   opacity: 0.8;
+  flex-shrink: 0;
 }
 .song-info {
   flex: 1;
   margin-left: 20rpx;
   overflow: hidden;
+  min-width: 0;
+  margin-right: 10rpx;
 }
 .song-name {
   font-size: 30rpx;
@@ -409,10 +439,46 @@ const onTouchEnd = async () => {
   color: #666;
   margin-left: 20rpx;
   font-family: monospace;
+  flex-shrink: 0;
 }
 .loading-text, .empty-text {
   text-align: center;
   margin-top: 100rpx;
   color: #666;
+}
+
+/* 分页控制器样式 */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30rpx 0;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.page-btn {
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  font-size: 36rpx;
+  color: #fff;
+  transition: all 0.2s;
+}
+.page-btn.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.page-btn:active {
+  background-color: rgba(0, 242, 234, 0.2);
+}
+.page-info {
+  margin: 0 40rpx;
+  font-size: 30rpx;
+  color: #888;
+  font-family: monospace;
 }
 </style>
