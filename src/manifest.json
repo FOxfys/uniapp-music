@@ -1,5 +1,5 @@
 {
-    "name" : "fox音乐",
+    "name" : "FOX音乐",
     "appid" : "__UNI__9FDFE0D",
     "description" : "一个炫酷的赛博朋克风格音乐App",
     "versionName" : "1.0.0",
@@ -15,7 +15,9 @@
             "autoclose" : true,
             "delay" : 0
         },
-        "modules" : {},
+        "modules" : {
+            "Camera" : {}
+        },
         "distribute" : {
             "android" : {
                 "permissions" : [
@@ -77,15 +79,25 @@
                 "androidStyle" : "default",
                 "iosStyle" : "default",
                 "android" : {
-                    "hdpi" : "C:/Users/23087/Desktop/23e91be0d2de4c24b4fe3a511cffc048preview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
-                    "xhdpi" : "C:/Users/23087/Desktop/2b.png",
-                    "xxhdpi" : "C:/Users/23087/Desktop/23e95_b.png"
+                    "hdpi" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                    "xhdpi" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                    "xxhdpi" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png"
                 },
                 "ios" : {
                     "iphone" : {
-                        "retina35" : "C:/Users/23087/Desktop/23e91be0d2de4c24b4fe3a511cffc048preview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
-                        "retina47" : "C:/Users/23087/Desktop/2b.png",
-                        "retina55" : "C:/Users/23087/Desktop/23e95_b.png"
+                        "retina35" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "retina47" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "retina55" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "portrait-896h@3x" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "landscape-896h@3x" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "portrait-896h@2x" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "landscape-896h@2x" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "iphonex" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "iphonexl" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "retina55l" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "retina47l" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "retina40" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
+                        "retina40l" : "C:/Users/23087/Desktop/e8a18667879a46c7ab71a4211759afacpreview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png"
                     }
                 }
             }
