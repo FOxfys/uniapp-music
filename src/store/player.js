@@ -3,6 +3,19 @@ import { getSongUrl, getSongCover, getLyric } from '../api/music.js';
 import { savePlayHistory } from '../api/playlist.js';
 import { userStore } from './user.js';
 
+// --- 全局初始化 iOS 音频配置 ---
+// #ifdef APP-PLUS
+if (uni.getSystemInfoSync().platform == 'ios') {
+	const innerAudioContext = uni.createInnerAudioContext();
+	innerAudioContext.autoplay = true;
+	uni.setInnerAudioOption({
+		obeyMuteSwitch: false,
+		mixWithOther: true
+	});
+}
+// #endif
+// ------------------------------------
+
 const audioManager = uni.getBackgroundAudioManager();
 
 const sysInfo = uni.getSystemInfoSync();
@@ -60,7 +73,6 @@ export const playerStore = reactive({
   async setSongAndPlay(song) {
     if (!song) return;
 
-    // 关键修改：切歌时先停止当前播放，防止旧的 onTimeUpdate 事件干扰进度条
     audioManager.stop();
 
     this.currentTime = 0;
@@ -73,7 +85,6 @@ export const playerStore = reactive({
     if (!this.currentSong.ar && this.currentSong.artists) this.currentSong.ar = this.currentSong.artists;
     if (!this.currentSong.al && this.currentSong.album) this.currentSong.al = this.currentSong.album;
 
-    // --- 1. Fetch Audio URL and play ---
     const playAudio = async () => {
       if (this.currentSong.url) {
         this._playAudio(this.currentSong.url);
@@ -96,7 +107,6 @@ export const playerStore = reactive({
     };
     playAudio();
 
-    // --- 2. Fetch Lyrics ---
     getLyric(song.id).then(res => {
       let lrcText = '';
       if (res?.data?.lrc?.lyric) lrcText = res.data.lrc.lyric;
@@ -111,7 +121,6 @@ export const playerStore = reactive({
       console.error("Failed to fetch lyric:", err);
     });
 
-    // --- 3. Fetch Cover if needed ---
     const hasCover = this.currentSong.al?.picUrl || this.currentSong.picUrl || this.currentSong.cover_url || this.currentSong.pic;
     if (!hasCover) {
       getSongCover(song.id).then(res => {
@@ -130,7 +139,26 @@ export const playerStore = reactive({
         url = url.replace('http://', 'https://');
     }
 
+    // #ifdef MP-WEIXIN || APP-PLUS
+    // 关键修复：在播放前再次激活音频会话，确保后台播放权限
+    uni.setInnerAudioOption({
+        obeyMuteSwitch: false,
+        mixWithOther: true
+    });
+    // #endif
+
+    if (audioManager.src === url) {
+        audioManager.play();
+        return;
+    }
+
     audioManager.src = url;
+    // #ifdef APP-PLUS
+    if (uni.getSystemInfoSync().platform === 'ios') {
+        audioManager.protocol = url.startsWith('https') ? 'https' : 'http';
+    }
+    // #endif
+    
     audioManager.title = this.currentSong.name || '未知歌曲';
     let singer = '未知歌手';
     if (this.currentSong.ar_name) {
@@ -138,15 +166,14 @@ export const playerStore = reactive({
     } else if (this.currentSong.ar) {
         singer = this.currentSong.ar.map(a => a.name).join('/');
     }
-    audioManager.singer = singer;
+    audioManager.singer = singer || 'Unknown Artist';
 
     let cover = this.currentSong.al?.picUrl || this.currentSong.picUrl || this.currentSong.cover_url || this.currentSong.pic || '';
     if (cover && cover.startsWith('http://')) {
         cover = cover.replace('http://', 'https://');
     }
-    audioManager.coverImgUrl = cover;
+    audioManager.coverImgUrl = cover || 'https://music.686909.xyz/static/default-avatar.png';
 
-    // 确保播放时从头开始
     audioManager.startTime = 0;
 
     if (userStore.isLoggedIn) {
@@ -232,9 +259,12 @@ audioManager.onTimeUpdate(() => {
   }
 });
 audioManager.onError((err) => {
-  console.error('Audio Error:', err);
+  console.error('Audio Error Details:', err);
+  if (playerStore.isPlaying && audioManager.currentTime > 0) {
+      console.warn('Ignored non-fatal audio error during playback.');
+      return;
+  }
   playerStore.isPlaying = false;
-  uni.showToast({ title: '音频播放错误', icon: 'none' });
 });
 audioManager.onCanplay(() => {
     if(audioManager.duration) {

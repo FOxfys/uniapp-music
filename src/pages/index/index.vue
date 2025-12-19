@@ -124,7 +124,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { onShow, onHide, onLoad } from '@dcloudio/uni-app';
-import { getHotPlaylists } from '@/api/music.js';
+import { getHotPlaylistsWithCache } from '@/api/music.js'; // 导入带缓存的函数
 import { userStore } from '@/store/user.js';
 import { playerStore } from '@/store/player.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
@@ -145,7 +145,7 @@ let canRefresh = false;
 
 onLoad(() => {
   // 使用 onLoad 替代 onMounted，触发更早
-  fetchData();
+  fetchData(false); // 首次加载使用缓存
 });
 
 onShow(() => {
@@ -161,11 +161,14 @@ const displayedPlaylist = computed(() => {
   return allPlaylists.value.slice(0, page.value * limit);
 });
 
-const fetchData = async () => {
-  // 添加 Loading 反馈
-  uni.showLoading({ title: '加载中...', mask: true });
+const fetchData = async (forceRefresh = false) => {
+  // 仅在首次加载时显示全屏 Loading
+  if (!forceRefresh) {
+    uni.showLoading({ title: '加载中...', mask: true });
+  }
   try {
-    const res = await getHotPlaylists();
+    // 使用带缓存的 API
+    const res = await getHotPlaylistsWithCache();
     if (res.playlists) {
       const playlists = res.playlists.map(item => {
         let url = item.coverImgUrl || item.picUrl || '';
@@ -186,7 +189,9 @@ const fetchData = async () => {
     console.error('Failed to fetch hot playlists:', error);
     uni.showToast({ title: '首页数据加载失败', icon: 'none' });
   } finally {
-    uni.hideLoading();
+    if (!forceRefresh) {
+      uni.hideLoading();
+    }
   }
 };
 
@@ -250,26 +255,7 @@ const onTouchEnd = async () => {
     isRefreshing.value = true;
     refresherHeight.value = 80;
     refresherText.value = '正在加载...';
-    // 下拉刷新时不显示全屏 Loading，避免闪烁
-    try {
-        const res = await getHotPlaylists();
-        if (res.playlists) {
-            // ... (重复数据处理逻辑，或者提取为公共函数)
-             const playlists = res.playlists.map(item => {
-                let url = item.coverImgUrl || item.picUrl || '';
-                if (url && url.startsWith('http://')) {
-                  url = url.replace('http://', 'https://');
-                }
-                return {
-                  id: item.id,
-                  name: item.name,
-                  picUrl: url
-                };
-              });
-              bannerList.value = playlists.slice(0, 5);
-              allPlaylists.value = playlists.slice(5);
-        }
-    } catch(e) { console.error(e) }
+    await fetchData(true); // 下拉刷新，强制请求新数据
 
     refresherText.value = '刷新完成';
     setTimeout(() => {

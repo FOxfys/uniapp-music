@@ -27,7 +27,7 @@ export const parseMusic = (params) => {
 };
 
 /**
- * 获取热门歌单
+ * 获取热门歌单 (原始接口)
  */
 export const getHotPlaylists = () => {
   return request({
@@ -35,6 +35,45 @@ export const getHotPlaylists = () => {
     method: 'GET'
   });
 };
+
+/**
+ * 获取热门歌单 (带缓存)
+ */
+export const getHotPlaylistsWithCache = () => {
+  const CACHE_KEY = 'hot_playlists_cache';
+  const EXPIRATION_MS = 1 * 60 * 60 * 1000; // 1小时
+
+  return new Promise((resolve, reject) => {
+    const cachedData = uni.getStorageSync(CACHE_KEY);
+
+    if (cachedData && (Date.now() - cachedData.timestamp < EXPIRATION_MS)) {
+      console.log('[Cache] Hit: Returning cached hot playlists.');
+      resolve(cachedData.data);
+      return;
+    }
+
+    console.log('[Cache] Miss: Fetching new hot playlists.');
+    request({
+      url: '/music/hot_playlists',
+      method: 'GET'
+    }).then(res => {
+      uni.setStorageSync(CACHE_KEY, {
+        data: res,
+        timestamp: Date.now()
+      });
+      resolve(res);
+    }).catch(err => {
+      // 如果请求失败，但有旧的缓存，也返回旧缓存，保证可用性
+      if (cachedData) {
+        console.warn('[Cache] API failed, returning stale cache.');
+        resolve(cachedData.data);
+      } else {
+        reject(err);
+      }
+    });
+  });
+};
+
 
 /**
  * 获取歌单详情 (网易云的歌单)
