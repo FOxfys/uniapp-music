@@ -48,7 +48,8 @@
           :style="{ animationDelay: index * 0.05 + 's' }"
         >
           <view class="card-bg"></view>
-          <view class="song-index">{{ String((currentPage - 1) * limit + index + 1).padStart(2, '0') }}</view>
+          <!-- 修复：使用动态计算的 pageSize 来显示序号 -->
+          <view class="song-index">{{ String((currentPage - 1) * pageSize + index + 1).padStart(2, '0') }}</view>
           <view class="song-info">
             <text class="song-name">{{ song.name }}</text>
             <text class="song-detail">
@@ -87,7 +88,7 @@ const loading = ref(false);
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalSongs = ref(0);
-const limit = 100; // 每页数量
+const pageSize = ref(20); // 默认每页20条，后续会根据后端返回动态调整
 
 // 自定义下拉刷新相关
 const refresherHeight = ref(0);
@@ -112,7 +113,8 @@ const goBack = () => uni.navigateBack();
 const fetchHistory = async (page) => {
   loading.value = true;
   try {
-    const res = await getPlayHistory({ page: page, limit: limit });
+    // 尝试请求 100 条，但后端可能会限制返回数量
+    const res = await getPlayHistory({ page: page, limit: 100 });
     if (res.code === 200 && res.history) {
       songList.value = res.history.map(item => ({
         id: item.song_id,
@@ -126,6 +128,15 @@ const fetchHistory = async (page) => {
       currentPage.value = res.page;
       totalPages.value = res.total_pages;
       totalSongs.value = res.total;
+
+      // 关键修复：动态计算真实的 pageSize
+      // 如果总页数大于1，我们可以通过 总数/总页数 向上取整来估算每页大小
+      if (res.total_pages > 0) {
+        pageSize.value = Math.ceil(res.total / res.total_pages);
+      } else if (res.history.length > 0) {
+        // 如果只有一页，直接用当前长度作为 pageSize (虽然此时序号计算不受影响)
+        pageSize.value = res.history.length;
+      }
     }
   } catch (error) {
     console.error(error);

@@ -60,6 +60,9 @@ export const playerStore = reactive({
   async setSongAndPlay(song) {
     if (!song) return;
 
+    // 关键修改：切歌时先停止当前播放，防止旧的 onTimeUpdate 事件干扰进度条
+    audioManager.stop();
+
     this.currentTime = 0;
     this.duration = 0;
     this.lyric = [];
@@ -142,6 +145,9 @@ export const playerStore = reactive({
         cover = cover.replace('http://', 'https://');
     }
     audioManager.coverImgUrl = cover;
+
+    // 确保播放时从头开始
+    audioManager.startTime = 0;
 
     if (userStore.isLoggedIn) {
       savePlayHistory({
