@@ -2,8 +2,6 @@
   <view class="home-container">
     <!-- 动态背景 -->
     <view class="bg-gradient"></view>
-    <!-- 优化：移除高耗能的 SVG 噪点背景，改用简单的透明度遮罩或纯 CSS 效果 -->
-    <!-- <view class="bg-noise"></view> -->
 
     <!-- 1. 顶部区域：固定不动 -->
     <view class="top-bar">
@@ -122,9 +120,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { onShow, onHide, onLoad } from '@dcloudio/uni-app';
-import { getHotPlaylistsWithCache } from '@/api/music.js'; // 导入带缓存的函数
+import { ref, computed, onMounted } from 'vue';
+import { onShow, onHide } from '@dcloudio/uni-app';
+import { getHotPlaylistsWithCache } from '@/api/music.js';
 import { userStore } from '@/store/user.js';
 import { playerStore } from '@/store/player.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
@@ -143,9 +141,9 @@ const isRefreshing = ref(false);
 let startY = 0;
 let canRefresh = false;
 
-onLoad(() => {
-  // 使用 onLoad 替代 onMounted，触发更早
-  fetchData(false); // 首次加载使用缓存
+// 修复：将数据请求移回 onMounted，确保视图层准备好后再调用
+onMounted(() => {
+  fetchData(false);
 });
 
 onShow(() => {
@@ -167,7 +165,6 @@ const fetchData = async (forceRefresh = false) => {
     uni.showLoading({ title: '加载中...', mask: true });
   }
   try {
-    // 使用带缓存的 API
     const res = await getHotPlaylistsWithCache();
     if (res.playlists) {
       const playlists = res.playlists.map(item => {
@@ -255,7 +252,7 @@ const onTouchEnd = async () => {
     isRefreshing.value = true;
     refresherHeight.value = 80;
     refresherText.value = '正在加载...';
-    await fetchData(true); // 下拉刷新，强制请求新数据
+    await fetchData(true);
 
     refresherText.value = '刷新完成';
     setTimeout(() => {
@@ -289,8 +286,6 @@ const onTouchEnd = async () => {
   background: radial-gradient(circle at 50% 0%, #1a2a3a, #121212 60%);
   z-index: 0;
 }
-/* 移除高耗能的 SVG 噪点 */
-/* .bg-noise { ... } */
 
 /* 顶部栏 */
 .top-bar {
@@ -300,8 +295,9 @@ const onTouchEnd = async () => {
   align-items: center;
   padding: 20rpx 30rpx;
   padding-top: calc(20rpx + env(safe-area-inset-top));
-  background: rgba(18, 18, 18, 0.8);
-  backdrop-filter: blur(10px);
+  /* 修复 iOS 黑屏：移除 backdrop-filter，改用高不透明度背景 */
+  background: rgba(18, 18, 18, 0.95);
+  /* backdrop-filter: blur(10px); */
 }
 
 /* 用户状态 */
@@ -410,7 +406,9 @@ const onTouchEnd = async () => {
 
 .scroll-content {
   flex: 1;
-  height: 0;
+  /* 修复 iOS 布局塌陷：使用 overflow: hidden 替代 height: 0 */
+  height: auto;
+  overflow: hidden;
   position: relative;
   z-index: 1;
 }
@@ -597,8 +595,9 @@ const onTouchEnd = async () => {
   right: 10rpx;
   width: 50rpx;
   height: 50rpx;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(5px);
+  /* 修复 iOS 黑屏：移除 backdrop-filter */
+  background: rgba(0,0,0,0.8);
+  /* backdrop-filter: blur(5px); */
   border-radius: 50%;
   display: flex;
   align-items: center;

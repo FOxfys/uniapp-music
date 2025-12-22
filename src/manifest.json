@@ -80,7 +80,7 @@
             },
             "splashscreen" : {
                 "androidStyle" : "default",
-                "iosStyle" : "common",
+                "iosStyle" : "default",
                 "android" : {
                     "hdpi" : "C:/Users/23087/Desktop/23e91be0d2de4c24b4fe3a511cffc048preview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
                     "xhdpi" : "C:/Users/23087/Desktop/23e91be0d2de4c24b4fe3a511cffc048preview.jpeg~tplv-a9rns2rl98-downsize_watermark_1_5_b.png",
