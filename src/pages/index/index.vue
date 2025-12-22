@@ -2,8 +2,7 @@
   <view class="home-container">
     <!-- 动态背景 -->
     <view class="bg-gradient"></view>
-    <!-- 优化：移除高耗能的 SVG 噪点背景，改用简单的透明度遮罩或纯 CSS 效果 -->
-    <!-- <view class="bg-noise"></view> -->
+    <view class="bg-noise"></view>
 
     <!-- 1. 顶部区域：固定不动 -->
     <view class="top-bar">
@@ -122,9 +121,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { onShow, onHide, onLoad } from '@dcloudio/uni-app';
-import { getHotPlaylists } from '@/api/music.js';
+import { ref, computed, onMounted } from 'vue';
+import { onShow, onHide } from '@dcloudio/uni-app';
+import { getHotPlaylistsWithCache } from '@/api/music.js';
 import { userStore } from '@/store/user.js';
 import { playerStore } from '@/store/player.js';
 import MusicPlayerWidget from '@/components/MusicPlayerWidget.vue';
@@ -143,9 +142,12 @@ const isRefreshing = ref(false);
 let startY = 0;
 let canRefresh = false;
 
-onLoad(() => {
-  // 使用 onLoad 替代 onMounted，触发更早
-  fetchData();
+// 关键修复：保留 onMounted 中的延迟，但缩短时间
+// 500ms -> 100ms：既能避开 iOS 渲染冲突，又能大幅提升加载速度
+onMounted(() => {
+  setTimeout(() => {
+    fetchData(false);
+  }, 100);
 });
 
 onShow(() => {
@@ -161,11 +163,13 @@ const displayedPlaylist = computed(() => {
   return allPlaylists.value.slice(0, page.value * limit);
 });
 
-const fetchData = async () => {
-  // 添加 Loading 反馈
-  uni.showLoading({ title: '加载中...', mask: true });
+const fetchData = async (forceRefresh = false) => {
+  // 仅在首次加载时显示全屏 Loading
+  if (!forceRefresh) {
+    uni.showLoading({ title: '加载中...', mask: true });
+  }
   try {
-    const res = await getHotPlaylists();
+    const res = await getHotPlaylistsWithCache();
     if (res.playlists) {
       const playlists = res.playlists.map(item => {
         let url = item.coverImgUrl || item.picUrl || '';
@@ -186,7 +190,9 @@ const fetchData = async () => {
     console.error('Failed to fetch hot playlists:', error);
     uni.showToast({ title: '首页数据加载失败', icon: 'none' });
   } finally {
-    uni.hideLoading();
+    if (!forceRefresh) {
+      uni.hideLoading();
+    }
   }
 };
 
@@ -250,26 +256,7 @@ const onTouchEnd = async () => {
     isRefreshing.value = true;
     refresherHeight.value = 80;
     refresherText.value = '正在加载...';
-    // 下拉刷新时不显示全屏 Loading，避免闪烁
-    try {
-        const res = await getHotPlaylists();
-        if (res.playlists) {
-            // ... (重复数据处理逻辑，或者提取为公共函数)
-             const playlists = res.playlists.map(item => {
-                let url = item.coverImgUrl || item.picUrl || '';
-                if (url && url.startsWith('http://')) {
-                  url = url.replace('http://', 'https://');
-                }
-                return {
-                  id: item.id,
-                  name: item.name,
-                  picUrl: url
-                };
-              });
-              bannerList.value = playlists.slice(0, 5);
-              allPlaylists.value = playlists.slice(5);
-        }
-    } catch(e) { console.error(e) }
+    await fetchData(true);
 
     refresherText.value = '刷新完成';
     setTimeout(() => {
@@ -303,8 +290,17 @@ const onTouchEnd = async () => {
   background: radial-gradient(circle at 50% 0%, #1a2a3a, #121212 60%);
   z-index: 0;
 }
-/* 移除高耗能的 SVG 噪点 */
-/* .bg-noise { ... } */
+.bg-noise {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
 
 /* 顶部栏 */
 .top-bar {
